@@ -8,11 +8,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use TamasLabs\Aura\Cell\CellConfig;
+use TamasLabs\Aura\Cell\CellRules;
+use TamasLabs\Aura\Cell\Reference;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
 use TamasLabs\Aura\Query\AuraQuery;
 use TamasLabs\Aura\Query\FieldPermissions;
 use TamasLabs\Aura\Request\AuraRequest;
 use TamasLabs\Aura\Response\AuraPayload;
+use TamasLabs\Aura\Response\NumericFields;
 
 /**
  * One table, as a class.
@@ -99,6 +103,18 @@ abstract class AuraTable
     }
 
     /**
+     * Conditional styling of whole rows.
+     *
+     * Formatting only: `rowRules` cannot hide a row (`row-rules.zod.ts`), and
+     * styling one away leaves its data in the payload. A row the user must not
+     * see belongs outside {@see self::query()}.
+     */
+    public function rowRules(): ?CellRules
+    {
+        return null;
+    }
+
+    /**
      * Serve one request: the definition, plus the page of data it asked for.
      *
      * @return array<string, mixed>
@@ -111,7 +127,10 @@ abstract class AuraTable
 
         $payload = AuraPayload::fromPaginator(AuraQuery::paginate($this->query(), $aura));
 
-        return $blueprint->definition + $payload->toArray();
+        $data = $payload->toArray();
+        $data['items'] = NumericFields::coerce($data['items'], $blueprint->numericFields);
+
+        return $blueprint->definition + $data;
     }
 
     /**
@@ -228,9 +247,12 @@ abstract class AuraTable
 
         self::assertKeysAreUnique($columns);
 
+        $cells = self::cellConfigsFrom($columns);
+
         return new TableBlueprint(
-            definition: $this->definitionFrom($grouped ? [$top, $second] : [$top], $columns, $model),
+            definition: $this->definitionFrom($grouped ? [$top, $second] : [$top], $columns, $model, $cells['configs']),
             permissions: self::permissionsFrom($columns),
+            numericFields: $cells['numeric'],
         );
     }
 
@@ -238,9 +260,10 @@ abstract class AuraTable
      * @param  list<list<array<string, mixed>>>  $rows
      * @param  list<array{0: Column, 1: array<string, mixed>}>  $columns
      * @param  TModel  $model
+     * @param  array<string, array<string, mixed>>  $configs
      * @return array<string, mixed>
      */
-    private function definitionFrom(array $rows, array $columns, Model $model): array
+    private function definitionFrom(array $rows, array $columns, Model $model, array $configs): array
     {
         $settings = $this->settings();
 
@@ -259,7 +282,7 @@ abstract class AuraTable
 
         $definition = ['header' => $header];
 
-        $body = self::bodyFrom($settings, $columns);
+        $body = $this->bodyFrom($settings, $columns, $configs);
 
         if ($body !== []) {
             $definition['body'] = $body;
@@ -276,9 +299,10 @@ abstract class AuraTable
 
     /**
      * @param  list<array{0: Column, 1: array<string, mixed>}>  $columns
+     * @param  array<string, array<string, mixed>>  $configs
      * @return array<string, mixed>
      */
-    private static function bodyFrom(TableSettings $settings, array $columns): array
+    private function bodyFrom(TableSettings $settings, array $columns, array $configs): array
     {
         $body = [];
 
@@ -286,6 +310,10 @@ abstract class AuraTable
 
         if ($bodySettings !== []) {
             $body['settings'] = $bodySettings;
+        }
+
+        if ($configs !== []) {
+            $body['columnConfigs'] = $configs;
         }
 
         $styles = [];
@@ -302,7 +330,160 @@ abstract class AuraTable
             $body['columnStyles'] = $styles;
         }
 
+        $rowRules = $this->rowRules();
+
+        if ($rowRules instanceof CellRules) {
+            // No column to borrow a field from, so the rules have to name their
+            // own with ->on(); the builder says so if they do not.
+            $body['rowRules'] = $rowRules->resolve('');
+        }
+
         return $body;
+    }
+
+    /**
+     * The `columnConfigs` entries, and the fields their conditions compare
+     * numerically.
+     *
+     * Keyed by **field**, not by column key. The schema says otherwise, but
+     * `TableBodyRow.tsx` looks a single-field column's renderer up under
+     * `columnConfigs[column.field]` and a multi-field column's under each
+     * member field's own name; `columnConfigs[column.key]` is read for one
+     * thing only, `cellRules`. Keying by the documented key would produce a
+     * payload that validates and renders nothing.
+     *
+     * @param  list<array{0: Column, 1: array<string, mixed>}>  $columns
+     * @return array{configs: array<string, array<string, mixed>>, numeric: list<string>}
+     *
+     * @throws InvalidDefinition
+     */
+    private static function cellConfigsFrom(array $columns): array
+    {
+        $configs = [];
+        $numeric = [];
+
+        foreach ($columns as [$column, $cell]) {
+            $key = isset($cell['key']) && is_string($cell['key']) ? $cell['key'] : null;
+            $field = isset($cell['field']) && is_string($cell['field']) ? $cell['field'] : null;
+            $fields = self::fieldList($cell);
+
+            $config = $column->cellConfig();
+
+            if ($config instanceof CellConfig) {
+                if ($fields !== null) {
+                    throw InvalidDefinition::configOnMultiFieldColumn($key ?? '');
+                }
+
+                if ($field === null || $field !== $key) {
+                    throw InvalidDefinition::configNeedsMatchingKey($key ?? '', $field);
+                }
+
+                self::assertFieldUnclaimed($configs, $field, $key);
+
+                $configs[$field] = $config->resolve($field, $cell);
+                $numeric = [...$numeric, ...$config->numericFields($field)];
+            }
+
+            foreach ($column->fieldConfigs() as $member => $memberConfig) {
+                $allowed = $fields ?? ($field === null ? [] : [$field]);
+
+                if (! in_array($member, $allowed, true)) {
+                    throw InvalidDefinition::configureUnknownField($key ?? '', $member, $allowed);
+                }
+
+                self::assertFieldUnclaimed($configs, $member, $key ?? '');
+
+                $configs[$member] = $memberConfig->resolve($member, $cell);
+                $numeric = [...$numeric, ...$memberConfig->numericFields($member)];
+            }
+
+            $rules = $column->cellRules();
+
+            if ($rules instanceof CellRules && $key !== null) {
+                // Same rule as a renderer, for the same reason — and here also
+                // because an invented key could collide with another column's
+                // field and overwrite that column's renderer.
+                if ($fields === null && $field !== $key) {
+                    throw InvalidDefinition::configNeedsMatchingKey($key, $field);
+                }
+
+                $read = $field ?? $key;
+
+                $configs[$key] = self::withRules($configs[$key] ?? null, $rules, $read, $fields, $cell);
+                $numeric = [...$numeric, ...$rules->numericFields($read)];
+            }
+        }
+
+        return ['configs' => $configs, 'numeric' => array_values(array_unique($numeric))];
+    }
+
+    /**
+     * Two columns cannot render the same field differently.
+     *
+     * `columnConfigs` is one flat map keyed by field, so a second configuration
+     * for a field already spoken for does not sit beside the first — it
+     * replaces it, and the column that lost renders whatever the winner says.
+     * Aura has no way to tell them apart, so the definition refuses to build
+     * rather than pick.
+     *
+     * @param  array<string, array<string, mixed>>  $configs
+     *
+     * @throws InvalidDefinition
+     */
+    private static function assertFieldUnclaimed(array $configs, string $field, string $key): void
+    {
+        if (array_key_exists($field, $configs)) {
+            throw InvalidDefinition::conflictingCellConfig($field, $key);
+        }
+    }
+
+    /**
+     * Attach cell rules to the entry Aura reads them from.
+     *
+     * `cellRules` is looked up at `columnConfigs[column.key]`, which for a
+     * column with no renderer of its own does not exist yet — and cannot be an
+     * entry carrying only rules, because every entry needs a `type`. The
+     * stand-in is a `reference` config, which is what the cell was already
+     * doing: reading the column's field and running it through the formatter
+     * chain, inherited here from the heading so the rendering does not change.
+     *
+     * @param  array<string, mixed>|null  $existing
+     * @param  list<string>|null  $fields
+     * @param  array<string, mixed>  $cell
+     * @return array<string, mixed>
+     */
+    private static function withRules(?array $existing, CellRules $rules, string $read, ?array $fields, array $cell): array
+    {
+        if ($existing !== null) {
+            $existing['cellRules'] = $rules->resolve($read);
+
+            return $existing;
+        }
+
+        $stand = Reference::make();
+
+        if ($fields !== null) {
+            $stand->set('fields', $fields);
+        }
+
+        return $stand->rules($rules)->resolve($read, $cell);
+    }
+
+    /**
+     * A cell's `fields`, when it has a usable list of them.
+     *
+     * @param  array<string, mixed>  $cell
+     * @return list<string>|null
+     */
+    private static function fieldList(array $cell): ?array
+    {
+        $fields = $cell['fields'] ?? null;
+
+        if (! is_array($fields)) {
+            return null;
+        }
+
+        return array_values(array_filter($fields, is_string(...)));
     }
 
     /**

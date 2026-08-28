@@ -190,3 +190,9 @@ it('builds a grouping heading that spans several columns', function (): void {
 
     assertMatchesAuraHeader($cells);
 });
+
+it('refuses a heading that is an empty string rather than no heading', function (): void {
+    // The contract types content as a non-empty string or null, and Aura's own
+    // response validation rejects the whole table over the one cell.
+    cell(Column::make('edit', ''));
+})->throws(InvalidDefinition::class, 'empty string');

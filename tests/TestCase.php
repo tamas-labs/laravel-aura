@@ -58,6 +58,7 @@ abstract class TestCase extends Orchestra
             $table->foreignId('company_id')->nullable();
             $table->string('first_name');
             $table->string('last_name');
+            $table->string('email')->nullable();
             $table->string('status')->nullable();
             $table->decimal('balance', 12, 2);
             $table->timestamp('created_at')->nullable();

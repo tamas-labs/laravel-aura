@@ -24,6 +24,14 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [Következtetés a modellből](#következtetés-a-modellből)
 - [Enumok](#enumok)
 - [Presetek](#presetek)
+- [Cella-renderelés](#cella-renderelés)
+  - [A kilenc típus](#a-kilenc-típus)
+  - [Többmezős oszlopok](#többmezős-oszlopok)
+  - [Feltételek](#feltételek)
+  - [Numerikus összehasonlítás](#numerikus-összehasonlítás)
+  - [Cella- és sorszabályok](#cella--és-sorszabályok)
+  - [Route-ok](#route-ok)
+  - [Bootstrap a szerződésben](#bootstrap-a-szerződésben)
 - [Csoportos header](#csoportos-header)
 - [Footer és beállítások](#footer-és-beállítások)
 - [A definíció cache-elése](#a-definíció-cache-elése)
@@ -44,21 +52,23 @@ származnak — így nem tudnak elcsúszni egymástól.
 
 ## Állapot
 
-A csomag a tervének **F3** fázisánál tart: a tábla osztály, és végponttól végpontig kiszolgál egy
-kérést.
+A csomag a tervének **F4** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
+kérést, és a cellái többet renderelnek szövegnél.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| `AuraTable` — táblánként egy osztály, `respond($request)` | A kilenc cellatípus — badge, link, progress, … (F4) |
-| Oszlopok, csoportok, footer, tábla-beállítások | Feltételes cella-konfiguráció (F4) |
-| Oszlop-defaultok a modell castjaiból | Action-oszlopok: `edit` / `show` / `destroy` (F5) |
-| A mező-whitelist, az oszlopokból származtatva | Soronkénti jogosultság (F5) |
-| Rendezés, keresés, szűrés, globális keresés | `make:aura-table` és a demo-app (F6) |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | Action-oszlopok konvenció-módban: `edit` / `show` / `destroy` (F5) |
+| Oszlopok, csoportok, footer, tábla-beállítások | Soronkénti jogosultság (F5) |
+| Oszlop-defaultok a modell castjaiból | `make:aura-table` és a demo-app (F6) |
+| A mező-whitelist, az oszlopokból származtatva | |
+| Rendezés, keresés, szűrés, globális keresés | |
 | Relációk mind a négy műveletben | |
+| A kilenc cella-renderelő, feltételekkel és cella-szabályokkal | |
 | Cache-elhető, kérésfüggetlen definíció | |
 
-A cellák F4-ig sima szövegként renderelnek. Az viszont készen van, hogy *mely* oszlopok vannak,
-hogy hívják őket, hogyan vannak formázva, és mit lehet velük csinálni.
+Action-oszlop ma is építhető — egy `Icon`, `Button` vagy `Modal` route-tal elég hozzá. Az F5 azt
+teszi hozzá, hogy a konvenció megnevezi helyetted a route-okat, és a soronkénti jogosultsági
+gépezetet, ami eldönti, melyik sor kap egyáltalán ilyet.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -328,6 +338,22 @@ Ha a modell nem castol arra az enumra, kérd közvetlenül: `->options(Status::c
 Az opciók az enum case-eiből jönnek, nem a betöltött sorokból. Ez az a különbség, ami számít: a
 sorokból származtatott lista nem tud olyan státuszt felkínálni, ami még senkinél nem szerepel.
 
+Két további interfész is van, mindkettő opcionális és mindkettő külön az `AuraOption`-től — mert
+egy szűrőlistának felirat kell és semmi más, és minden benne szereplő enumtól színt követelni a
+legtöbbjükön halott metódust jelentene:
+
+```php
+enum Status: string implements AuraOption, AuraVariant, AuraIcon
+{
+    public function variant(): string { … }   // 'success' — vagy kulcs az app variants-regiszterébe
+    public function icon(): string { … }      // kulcs az app icons-regiszterébe
+}
+```
+
+A `Badge::fromEnum(Status::class)` mind a hármat kiolvassa, és minden case-hez felépíti a badge-et.
+Az az enum, amelyik egyiket sem implementálja, szintén használható badge-térképet ad a
+case-neveiből — amit nem tud adni, az a szín, és azt case-enként kitalálni rosszabb, mint kihagyni.
+
 ---
 
 ## Presetek
@@ -352,6 +378,222 @@ Column::make('plan')->apply(new Options(Tier::class));
 
 A presetek ugyanazon az ajtón írnak, mint a következtetés, tehát egy explicit hívás mindkét
 sorrendben nyer. Sajátot a `Preset::apply(Column $column): void` implementálásával írsz.
+
+---
+
+## Cella-renderelés
+
+A cella alapesetben szövegként mutatja az értékét. A **cella-konfiguráció** ezt lecseréli a
+szerződés kilenc renderelőjének egyikére, és az oszlophoz kapcsolódik:
+
+```php
+use TamasLabs\Aura\Cell\{Badge, Icon, Modal, Reference};
+
+public function columns(): array
+{
+    return [
+        Column::make('status')->filterable()->as(Badge::fromEnum(Status::class)),
+        Column::make('email')->as(Reference::make()->lowercase()),
+        Column::make('edit')->content(null)->as(Icon::make('pencil')->route('users.{id}.edit')),
+        Column::make('delete')->content(null)->as(Modal::destroy()->route('users.{id}.destroy')->icon('trash', 'danger')),
+    ];
+}
+```
+
+A konfiguráció szándékosan külön objektum az oszloptól. Az oszlop a **fejlécet** írja le és azt,
+mit enged a szerver a mezővel csinálni; a konfiguráció a **cellát**. Közös kulcsneveik vannak
+(`align`, `currency`, `class`) különböző célponttal, és egyetlen builder mindkettőre azt jelentené,
+hogy találgatni kell, épp melyiket állítod.
+
+Két dolgot érdemes tudni, mielőtt hozzácsatolsz egyet.
+
+**A fejléc formázása nem jut el a celláig.** Az Aura a konfigurációt **önmagában** adja át a
+renderelőnek, tehát egy `currency()` oszlop sima konfigurációval hirtelen nyers számokat mutatna.
+Ezért az oszlop formázó-beállításai alapértelmezésként bekerülnek a konfigurációba — az explicit
+hívás a konfiguráción továbbra is nyer:
+
+```php
+Column::make('balance')->as(Reference::make());                   // továbbra is pénznemként formázva
+Column::make('balance')->as(Reference::make()->currency(false));  // szándékosan nem
+```
+
+**Konfigurációt hordozó oszlopnál a `key` és a `field` nem térhet el.** Az Aura a renderelőt a
+`columnConfigs[column.field]` alól olvassa, a cella-szabályokat a `columnConfigs[column.key]` alól
+— egy oszlop, ahol a kettő különbözik, mindkét bejegyzést igényelné, és azt kapná, amelyikhez a
+keresés épp eljut. Alapból amúgy is egyeznek; egy ezzel ellentétes explicit `->key()` inkább
+elutasításra kerül, mint hogy félig érvényesüljön.
+
+### A kilenc típus
+
+| Típus | Builder | Mit renderel |
+| --- | --- | --- |
+| `static` | `Text::make('—')` | rögzített szöveget — **nem** a sor értékét |
+| `reference` | `Reference::make()` | a sor értékét, a formázóláncon át |
+| `badge` | `Badge::make()` | színes pirulát |
+| `link` | `Link::make()->route(…)` | linket |
+| `button` | `Button::make('Szerkesztés')->route(…)` | gombot |
+| `icon` | `Icon::make('pencil')` | ikont, opcionálisan linkkel |
+| `modal` | `Modal::destroy()` | modal-nyitó triggert |
+| `progress` | `Progress::make()` | folyamatjelzőt |
+| `custom` | `Custom::template(…)` | amit a host app regisztere renderel |
+
+A `Text` a szerződés `static` típusa; a `Static` foglalt szó PHP-ban. A `value`-t rendereli, a sort
+soha nem olvassa — a sor saját adatához ugyanazzal a formázással a `Reference` való, aminek a
+`field`-je az oszlopéból jön.
+
+Minden típus osztozik a formázóláncon (`currency`, `date`, `datetime`, `time`, `slice`,
+`uppercase`, `padStart`, `raw`, …), a tipográfiablokkon (`color`, `align`, `fontSize`, `italic`,
+…), ahol a szerződés ad neki ilyet, és a `class()` / `style()` páron az általa rajzolt elemen.
+Az `Icon`, a `Modal` és a `Progress` formázóláncot nem ismer, és nem örököl semmit az oszloptól.
+
+A `datetime`, a `time` és a `raw` hiányzik a config-sémákból, a renderelő viszont olvassa őket
+(`buildFormatConfig.ts`), és minden config enged további property-ket — ezért itt a dokumentált
+kulcsok mellett szerepelnek. További három, amit a renderelő olvas, de buildernek nincs:
+`currencyCode`, `sliceEnd`, `pad` — ezek a `merge()`-dzsel érhetők el.
+
+A `Custom` szándékosan vékony. A `renderer` és a `callback` a host app JavaScript-regiszterének
+függvényeit nevezi meg, és PHP-ból egyik létezése sem ellenőrizhető — egy elgépelés olyan cella,
+ami semmit nem renderel, és a böngészőben derül ki. A csatolás iránya itt fordított mindenhez
+képest: a PHP-ban leírt név ígéret a frontend buildről.
+
+Amire nincs builder-metódus, arra a `merge()` a szelep — ellenőrizetlen, és ezt vállalja is: a
+sémában mind a kilenc config `additionalProperties: true`, és **egyedül a `type` kötelező**, tehát
+a séma szinte bármit átengedne. Csak a szerkezeti kulcsokat (`type`, `key`, `if`, `else`) utasítja
+vissza, mert azok döntik el, hogy a többit hogyan kell olvasni — és a `set()`-ben utasítja vissza,
+mert oda fut be a `merge()` és a közvetlen hívás is. Egy kézzel írt `key` egyébként legyőzné azt,
+amivel a feltételek kimennek, és vinné magával a feltételeket.
+
+### Többmezős oszlopok
+
+Egy `combined()` oszlop tagmezőnként egy szegmenst renderel, és az Aura mindegyiket az adott mező
+neve alatt keresi. Ezért mezőnként konfigurálható:
+
+```php
+Column::combined('name', ['first_name', 'last_name'])
+    ->reference('last_name')
+    ->sortable()
+    ->configure('last_name', Reference::make()->uppercase());
+```
+
+Egyetlen `->as()` egy ilyen oszlopon nem tud hová csatlakozni, ezért elutasításra kerül.
+
+### Feltételek
+
+Bármelyik konfiguráció változhat soronként. Az ágak sorrendben értékelődnek, az első találat nyer:
+
+```php
+use TamasLabs\Aura\Cell\Condition;
+
+Column::make('balance')->as(
+    Reference::make()
+        ->when(Condition::lt(0), fn (Reference $r) => $r->color('danger')->fontWeight(700))
+        ->when(Condition::gt(1_000_000), fn (Reference $r) => $r->color('success'))
+        ->otherwise(fn (Reference $r) => $r->color('dark'))
+);
+```
+
+A `when()` a feltételt és az ágat konfiguráló callbacket kapja; az `otherwise()` az, ami akkor
+érvényesül, ha egyik ág sem illeszkedett. **Az `otherwise()` elhagyása jelentéssel bír**: az
+egyetlen ágra sem illeszkedő sor üres cellát kap, és ez a támogatott módja annak, hogy egy cella
+soronként elrejtőzzön.
+
+A feltételek az oszlop saját mezőjét olvassák, hacsak az `on()` mást nem nevez meg:
+
+```php
+Badge::make()->on('archived_at')->when(Condition::notNull(), fn (Badge $b) => $b->variant('secondary'));
+```
+
+Tizenkilenc operátor — a szerződés összes operátora, miután az öt aliasa kikerült:
+
+| | | |
+| --- | --- | --- |
+| `eq($v)` `ne($v)` | `gt($v)` `gte($v)` `lt($v)` `lte($v)` | `between($min, $max)` |
+| `in($values)` `notIn($values)` | `contains($s)` `startsWith($s)` `endsWith($s)` | `regex($pattern)` |
+| `isNull()` `notNull()` | `isEmpty()` `notEmpty()` | `isTrue()` `isFalse()` |
+
+Négyük úgy viselkedik, ahogy a szerződés saját leírása **nem** mondja, és a különbség számít:
+
+- **Az `isTrue()` / `isFalse()` egzakt.** Az `1` nem `true`. Egy `tinyint` oszlopot `bool`-ra kell
+  castolni a modellen, különben az ág mindig hamis.
+- **Az `isEmpty()` a `0`-t és a `false`-t üresnek számítja**, a `[]`-t és a `{}`-t viszont *nem*.
+- **Az `eq()` szigorú.** Az `1` nem egyezik az `'1'`-gyel.
+- **A `regex()` JavaScript-mintát vár** — határolók és PHP-módosítók nélkül. Egy a böngészőben
+  lefordíthatatlan minta némán hamissá teszi az ágat.
+
+Öt szintnél mélyebb egymásba ágyazás dob: az Aura ötöt old fel, és a csonkolt konfigurációt
+rendereli, némán.
+
+### Numerikus összehasonlítás
+
+A `gt`, `gte`, `lt`, `lte` és `between` mindkét oldalon valódi számot követel — vagy két olyan
+értéket, ami dátumként parse-olható —, és **egyébként hamis, mindenféle naplózás nélkül**. A
+Laravel `decimal:2` castja stringként szerializálódik:
+
+```json
+{ "balance": "1234.50" }
+```
+
+Tehát a `Condition::gt(1000)` a pénzoszlopon soha nem illeszkedne — pont azon a típuson, ami a
+leginkább kér egy ilyen feltételt. Ezért a csomag összegyűjti azokat a mezőket, amiket a feltételei
+numerikusan hasonlítanak, és a válaszban **csak azokat** alakítja át. Két korlát szándékos: csak
+numerikus stringet érint, tehát egy `gt`-vel hasonlított dátum sértetlen marad; és csak azokat a
+mezőket, amiket egy feltétel tényleg olvas, tehát a payload többi része változatlan.
+
+Egy `Progress` sáv `field`, `min` és `max` mezője ugyanezért alakul át, feltétel ide vagy oda.
+
+### Cella- és sorszabályok
+
+A `CellRules` a tartalom körüli `<td>`-t formázza, ugyanazzal a feltételes felülettel:
+
+```php
+use TamasLabs\Aura\Cell\CellRules;
+
+Column::make('balance')->rules(
+    CellRules::make()->when(Condition::lt(0), fn (CellRules $r) => $r->background('#fee'))
+);
+```
+
+Ugyanez az objektum formázza a teljes sort, a tábláról:
+
+```php
+public function rowRules(): ?CellRules
+{
+    return CellRules::make()
+        ->on('status')
+        ->when(Condition::eq('suspended'), fn (CellRules $r) => $r->opacity(0.5));
+}
+```
+
+A sorszabályoknak nincs oszlopuk, amitől mezőt kölcsönözhetnének, ezért `on()`-nal meg kell
+nevezniük egyet.
+
+**A sorszabály csak formázás.** Sort elrejteni nem tud, és a formázással eltüntetett sor adata ott
+marad a payloadban bárkinek, aki elolvassa a választ. Az a sor, amit a felhasználó nem láthat, a
+`query()`-n kívülre való.
+
+### Route-ok
+
+A route soronként feloldott sablon. Az Aura behelyettesíti a `{placeholder}` tokeneket, **minden
+megmaradt pontot perjelre cserél**, majd elé fűzi a host app `siteName`-jét:
+
+```php
+Icon::make('pencil')->route('users.{id}.edit');   // → /users/5/edit
+Icon::make('pencil')->route('/users/{id}/edit');  // → ugyanaz
+```
+
+Ezért utasítja el a csomag a Laravel `route()` helperének abszolút URL-jét: az
+`/https://app/example/com/users/5/edit`-ként jönne ki. Az Aura `[\w.]+` ábécéjén kívüli placeholder
+szintén elutasításra kerül — az szó szerint bennmaradna az URL-ben. Amit a csomag nem tud
+ellenőrizni, az az érték: egy pontot tartalmazó behelyettesítés (mondjuk egy e-mail cím) szétszedi
+az útvonalat.
+
+### Bootstrap a szerződésben
+
+A `class`, a `text` és a Bootstrap-színnevek (`primary`, `success`, `danger`, …) a szerződés
+kulcsai, nem ennek a csomagnak a kitalált absztrakciója. Változatlanul mennek át a dróton, és egy
+másképp stílusozott frontendnek semmit nem jelentenek. A `variant` és az `icon` egy lépéssel
+odébb van — azok a host app saját `variants` és `icons` regiszterének kulcsai, amiket az Aura az ő
+oldalán old fel osztályokká, tehát egy ikonnévként átadott nyers CSS-osztály semmit nem renderel.
 
 ---
 
@@ -462,6 +704,16 @@ hozzáér — ahelyett hogy a böngésző rosszat renderelne:
 | Kettőnél kevesebb oszlopot átfogó csoport | a mezőtlen cellának legalább kettőt kell átfognia |
 | `Column::heading()` `colspan: 1`-gyel | ugyanaz a szabály |
 | Oszlop nélküli tábla | a szerződés legalább egy header-sort kér, legalább egy cellával |
+| Üres stringes fejléc | a szerződés nem üres stringet vagy `null`-t vár; az üres az Aura saját validációján bukik el, és az egész táblát viszi |
+| Cella-konfiguráció olyan oszlopon, ahol a `key` és a `field` eltér | a renderelőt a mező, a cella-szabályokat a kulcs alól olvassa, tehát csak a fele érvényesülne |
+| Egyetlen konfiguráció `combined()` oszlopon | az Aura tagmezőnként renderel szegmenst, és mindegyiket név szerint keresi — `configure()` kell |
+| `configure()` olyan mezőre, amit az oszlop nem olvas | nincs hozzá szegmens |
+| Konfiguráció, ami semmit nem renderel (`Text` érték nélkül, `Icon` ikon nélkül, `Modal` trigger nélkül) | a cella üresen jönne ki |
+| Ötnél mélyebbre ágyazott feltételek | az Aura ötöt old fel, és a csonkolt konfigurációt rendereli, némán |
+| Feltételek, amiknek nincs olvasandó mezőjük | `key` nélkül az Aura átugorja őket, és az alapkonfigurációt érvényesíti — fail-open |
+| Abszolút route, vagy `[\w.]+`-en kívüli placeholder | az Aura minden pontot perjelre cserél, tehát a `route()` URL-je útvonallá válik; a nem illeszkedő placeholder szó szerint bennmarad |
+| Két oszlop, ami ugyanazt a mezőt rendereli | a `columnConfigs` egyetlen, mező szerint kulcsolt map, tehát a második bejegyzés felülírja az elsőt, és a vesztes oszlop a győztes konfigurációját rendereli |
+| `merge()` vagy `set()`, ami `type`, `key`, `if` vagy `else` kulcsot állítana | azok döntik el, hogyan kell a többit olvasni; egy kézzel írt `key` legyőzi a kiadottat, és viszi magával a feltételeket |
 
 ---
 
@@ -712,7 +964,7 @@ külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 | **F1** | Contract-teszt harness | ✅ kész |
 | **F2** | Query-oldal — kérés → Eloquent → `items`/`meta`/`links` | ✅ kész |
 | **F3** | Definíciós mag: `AuraTable`, `Column`, következtetés, cache | ✅ kész |
-| **F4** | Cella-builderek: badge, link, button, icon, modal, progress, feltételes konfiguráció | tervezett |
+| **F4** | Cella-builderek: badge, link, button, icon, modal, progress, feltételes konfiguráció | ✅ kész |
 | **F5** | Action-réteg (`edit` / `show` / `destroy`) és soronkénti jogosultság | tervezett |
 | **F6** | Demo workbench-app, `make:aura-table`, kiadás | tervezett |
 

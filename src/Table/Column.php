@@ -8,6 +8,8 @@ use BackedEnum;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Macroable;
+use TamasLabs\Aura\Cell\CellConfig;
+use TamasLabs\Aura\Cell\CellRules;
 use TamasLabs\Aura\Contracts\AuraOption;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
 
@@ -49,6 +51,19 @@ final class Column
 
     /** @var string|list<string>|null */
     private string|array|null $cellClass = null;
+
+    /** How this column's data cells are rendered — one entry of `body.columnConfigs`. */
+    private ?CellConfig $config = null;
+
+    /**
+     * Per-field renderers for a multi-field column, keyed by field.
+     *
+     * @var array<string, CellConfig>
+     */
+    private array $fieldConfigs = [];
+
+    /** Conditional styling of this column's `<td>`s. */
+    private ?CellRules $rules = null;
 
     private function __construct() {}
 
@@ -423,6 +438,62 @@ final class Column
     }
 
     /**
+     * How this column's data cells are rendered.
+     *
+     * ```php
+     * Column::make('status')->filterable()->as(Badge::fromEnum(Status::class));
+     * ```
+     *
+     * The configuration replaces the plain value the cell would otherwise show,
+     * and Aura hands it to the renderer on its own — the heading's formatting
+     * no longer reaches it. What the column already sets (`currency()`,
+     * `date()`, `slice()` …) is therefore copied into the configuration as
+     * defaults, so this call adds a rendering rather than quietly removing one.
+     *
+     * Only for a column that reads a single field. See
+     * {@see self::configure()} for a multi-field one.
+     */
+    public function as(CellConfig $config): self
+    {
+        $this->config = $config;
+
+        return $this;
+    }
+
+    /**
+     * How one field of a multi-field column is rendered.
+     *
+     * Aura builds a segment per member field and looks each one up in
+     * `columnConfigs` by that field's name, so a combined column is configured
+     * a field at a time:
+     *
+     * ```php
+     * Column::combined('name', ['first_name', 'last_name'])
+     *     ->reference('last_name')
+     *     ->configure('last_name', Reference::make()->uppercase());
+     * ```
+     */
+    public function configure(string $field, CellConfig $config): self
+    {
+        $this->fieldConfigs[$field] = $config;
+
+        return $this;
+    }
+
+    /**
+     * Conditional styling of this column's `<td>` elements.
+     *
+     * Styling only, and per row — it cannot hide a row. A row the user must not
+     * see belongs outside the query.
+     */
+    public function rules(CellRules $rules): self
+    {
+        $this->rules = $rules;
+
+        return $this;
+    }
+
+    /**
      * Turn off model-driven inference for this column.
      */
     public function withoutInference(): self
@@ -524,6 +595,32 @@ final class Column
     }
 
     /**
+     * This column's cell renderer, if it has one.
+     */
+    public function cellConfig(): ?CellConfig
+    {
+        return $this->config;
+    }
+
+    /**
+     * The per-field renderers of a multi-field column.
+     *
+     * @return array<string, CellConfig>
+     */
+    public function fieldConfigs(): array
+    {
+        return $this->fieldConfigs;
+    }
+
+    /**
+     * This column's conditional cell styling, if any.
+     */
+    public function cellRules(): ?CellRules
+    {
+        return $this->rules;
+    }
+
+    /**
      * Is inference on for this column?
      */
     public function infers(): bool
@@ -602,6 +699,13 @@ final class Column
     {
         $content = isset($cell['content']) && is_string($cell['content']) ? $cell['content'] : null;
         $hasField = isset($cell['field']) && is_string($cell['field']);
+
+        if ($content === '') {
+            $key = isset($cell['key']) && is_string($cell['key']) ? $cell['key'] : '';
+
+            throw InvalidDefinition::emptyHeading($key);
+        }
+
         $hasFields = isset($cell['fields']) && is_array($cell['fields']);
 
         if ($hasFields && ! (isset($cell['key']) && is_string($cell['key']))) {

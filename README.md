@@ -22,7 +22,9 @@ and it answers the request.
   other constraints
 - 🔗 **Relations** in all four operations — `whereHas` at any depth for search and filter, a
   correlated subquery (never a join, which would corrupt `meta.total`) for sorting
-- 🧩 **Grouped headers, footers, presets**, and a `Macroable` column builder
+- 🎨 **Nine cell renderers** — badge, link, button, icon, modal, progress, and the rest — with
+  per-row conditions, and a table that refuses the four ways Aura fails silently
+- 🧩 **Grouped headers, footers, presets**, and `Macroable` builders throughout
 - ⚡ **Cacheable definition** — the header, body and footer do not depend on the request
 - ✅ **Schema-validated** against [`tamas-labs/aura-schema`](https://github.com/tamas-labs/aura-schema)
   in the test suite, offline — no network call, and an unresolvable schema throws
@@ -30,9 +32,9 @@ and it answers the request.
 
 ## Status
 
-The definition core (**F3**) is complete: a table is a class and serves a request end to end.
-Cells render as plain text until **F4** brings the nine renderers (badge, link, progress, …); the
-action layer and per-row permissions come in **F5**. See
+The definition core (**F3**) and the cell builders (**F4**) are complete: a table is a class,
+serves a request end to end, and renders badges, links, progress bars and the rest, conditionally
+per row. The action layer's convention mode and per-row permissions come in **F5**. See
 [Status](./README.en.md#status) for the full picture.
 
 Not released: no tag, not on Packagist.
@@ -65,6 +67,7 @@ php artisan vendor:publish --tag=aura-config
 ## Quick start
 
 ```php
+use TamasLabs\Aura\Cell\{Badge, Condition, Reference};
 use TamasLabs\Aura\Table\{AuraTable, Column};
 
 /**
@@ -83,8 +86,11 @@ final class UserTable extends AuraTable
             Column::selection(),
             Column::make('last_name')->sortable()->searchable()->globalSearch(),
             Column::make('company.name', 'Company')->sortable(),
-            Column::make('status')->filterable(),      // options inferred from the enum cast
-            Column::make('balance')->sortable(),       // currency + right-aligned from the decimal cast
+            Column::make('status')->filterable()       // options inferred from the enum cast
+                ->as(Badge::fromEnum(Status::class)),   // …and the badge built from the same one
+            Column::make('balance')->sortable()->as(   // currency + right-aligned from the decimal cast
+                Reference::make()->when(Condition::lt(0), fn (Reference $r) => $r->color('danger'))
+            ),
             Column::make('created_at')->sortable()->searchable(),
         ];
     }
@@ -111,7 +117,7 @@ return [
 There is deliberately no default page size: `paginate` is required by the contract, and defaulting
 a missing one would turn a broken client into a silently short page instead of a 422.
 
-## Three things worth knowing up front
+## Four things worth knowing up front
 
 **The header and the whitelist are one definition.** What the browser is offered and what the
 query accepts are derived from the same columns, resolving the field exactly as Aura does
@@ -125,6 +131,12 @@ neither `simplePaginate()` nor `cursorPaginate()` can supply — passing one rai
 **Sorting through a relation is limited to one to-one level.** A join would multiply rows on a
 to-many relation and corrupt the pagination itself, so sorting uses a correlated subquery instead.
 Searching and filtering have no such limit.
+
+**The definition refuses what Aura would render wrongly in silence.** A cell configuration keyed
+where Aura will not look for it, conditions with no field to read, an absolute route, nesting past
+Aura's recursion cap — each of these produces a payload that validates against the schema and then
+does nothing, so the package raises `InvalidDefinition` on the server instead. See
+[what the table refuses to build](./README.en.md#what-the-table-refuses-to-build).
 
 ## Development
 

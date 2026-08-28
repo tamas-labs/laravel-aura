@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace TamasLabs\Aura\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Builder;
+use TamasLabs\Aura\Cell\CellRules;
 use TamasLabs\Aura\Table\AuraTable;
 use TamasLabs\Aura\Table\Column;
 use TamasLabs\Aura\Table\ColumnGroup;
@@ -26,6 +27,7 @@ final class InlineTable extends AuraTable
         private readonly array $definition,
         private readonly ?Footer $footerBlock = null,
         private readonly ?TableSettings $tableSettings = null,
+        private readonly ?CellRules $rules = null,
     ) {}
 
     /**
@@ -58,5 +60,13 @@ final class InlineTable extends AuraTable
     public function settings(): TableSettings
     {
         return $this->tableSettings ?? TableSettings::make();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function rowRules(): ?CellRules
+    {
+        return $this->rules;
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace TamasLabs\Aura\Table;
 
 use TamasLabs\Aura\Query\FieldPermissions;
+use TamasLabs\Aura\Response\NumericFields;
 
 /**
  * Everything about a table that does not depend on the request: the blocks that
@@ -23,14 +24,16 @@ final readonly class TableBlueprint
 {
     /**
      * @param  array<string, mixed>  $definition  `header`, and `body` / `footer` when they carry anything.
+     * @param  list<string>  $numericFields  Fields a condition compares numerically; see {@see NumericFields}.
      */
     public function __construct(
         public array $definition,
         public FieldPermissions $permissions,
+        public array $numericFields = [],
     ) {}
 
     /**
-     * @return array{definition: array<string, mixed>, fields: array{sortable: list<string>, searchable: list<string>, filterable: list<string>, globalSearch: list<string>}}
+     * @return array{definition: array<string, mixed>, fields: array{sortable: list<string>, searchable: list<string>, filterable: list<string>, globalSearch: list<string>, numeric: list<string>}}
      */
     public function toArray(): array
     {
@@ -41,6 +44,7 @@ final readonly class TableBlueprint
                 'searchable' => $this->permissions->searchable,
                 'filterable' => $this->permissions->filterable,
                 'globalSearch' => $this->permissions->globalSearch,
+                'numeric' => $this->numericFields,
             ],
         ];
     }
@@ -63,6 +67,7 @@ final readonly class TableBlueprint
                 filterable: self::strings($fields, 'filterable'),
                 globalSearch: self::strings($fields, 'globalSearch'),
             ),
+            numericFields: self::strings($fields, 'numeric'),
         );
     }
 

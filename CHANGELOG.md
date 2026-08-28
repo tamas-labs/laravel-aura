@@ -38,6 +38,32 @@ szerződés verziója külön él a csomagverziótól.
   cella, oszlop nélküli tábla.
 - **README** három fájlban, a workspace mintája szerint: `README.md` (rövid, telepítés és
   alapok), `README.en.md` és `README.hu.md` (teljes referencia angolul és magyarul).
+- **Cella-builderek** (F4): a `body.columnConfigs` mind a kilenc típusa — `Text` (a szerződés
+  `static`-ja; a `Static` foglalt szó PHP-ban), `Reference`, `Badge`, `Link`, `Button`, `Icon`,
+  `Modal`, `Progress`, `Custom` —, közös trait-ekre bontva (`HasFormatting`, `HasTypography`,
+  `HasMapping`, `HasRoute`). Oszlophoz `->as()`-szal kapcsolódnak, többmezős oszlophoz
+  `->configure()`-ral.
+- **Feltételes konfiguráció**: `Condition` 19 operátorral (a szerződés 24 kulcsából 5 tiszta
+  alias), `when()` / `otherwise()` / `on()`, és ugyanez a felület a `CellRules`-on a `<td>`-re,
+  illetve `AuraTable::rowRules()`-ként a `<tr>`-re.
+- **`AuraVariant` és `AuraIcon`** enum-interfészek az `AuraOption` mellé, külön és opcionálisan.
+  A `Badge::fromEnum()` mind a hármat kiolvassa, és egy interfészt sem implementáló enumból is
+  használható badge-térképet ad.
+- **A header formázása leöröklődik a cella-configba.** Renderelő mellett az Aura a configot
+  önmagában adja át, tehát az oszlop `currency()` / `date()` / `slice()` beállítása egyébként
+  némán elveszne. Az explicit hívás a configon továbbra is nyer.
+- **`datetime()`, `time()` és `raw()` a cella-configokon is**, az oszlop mintájára. A config-sémák
+  nem sorolják fel őket, a renderelő viszont olvassa mindhármat (`buildFormatConfig.ts`), és eddig
+  csak leöröklődni tudtak — beállítani vagy felülírni nem.
+
+### Javítva
+
+- **A `Modal` beágyazott triggere feltételes ágon belül némán eltűnt.** Egy ág nem a `resolve()`-on
+  megy keresztül, hanem a `settings()`-en, tehát a `when(..., fn ($m) => $m->content(...))` csak a
+  feltételt adta ki, a triggert nem: az ág illeszkedett, és semmit nem változtatott. A típusok
+  mostantól az ágakon is előkészülnek.
+- **A `resolve()` nem írja át a buildert, amin meghívták.** A `Modal` a beágyazott triggert
+  korábban `$this`-be írta, mielőtt a másolat elkészült volna; a `prepare()` horog a másolaton fut.
 
 ### Biztonság
 
@@ -53,6 +79,26 @@ szerződés verziója külön él a csomagverziótól.
 - Minden adatoszlop a `header.rows` **utolsó** sorába kerül. Az Aura csak onnan veszi az
   oszlopokat, tehát egy korábbi sorban ragadt `selectable` cella némán kikapcsolná a
   sor-kijelölést (INV9).
+- **`if` sosem kerül ki `key` nélkül.** Az Aura ilyenkor átugorja a feltételeket és az
+  alapkonfigurációt érvényesíti — fail-open, és rossz irány, ha épp a feltétel dönt arról, mi
+  látszik. Ha nincs honnan venni a mezőt, a definíció build-időben dob (INV6, INV12).
+- **A feltételek 5 szintnél mélyebb egymásba ágyazása build-időben dob.** Az Aura `MAX_RECURSION_DEPTH`
+  fölött némán csonkolja a konfigurációt (INV5).
+- **A route csak relatív lehet.** Az Aura minden pontot perjelre cserél, tehát a `route()`
+  abszolút URL-je `/https://app/test/…`-ként renderelődne; abszolút URL és az Aura regexén kívüli
+  `{placeholder}` egyaránt build-időben dob (INV2).
+- **A numerikusan összehasonlított mezők számként mennek ki.** Az Aura `gt`/`lt`/`between`
+  operátorai `number`-t követelnek, a Laravel `decimal` cast viszont stringet ad, tehát a feltétel
+  némán soha nem illeszkedne (INV11).
+- **A renderelők nem tágítják a whitelistet.** A cella-config azt mondja meg, hogy néz ki egy
+  cella, sosem azt, hogy mit fogad el a szerver.
+- **A szerkezeti kulcsokat a `set()` utasítja vissza, nem a `merge()`.** Oda fut be mindkét út: a
+  `merge()` a `set()`-nek delegál, és a `set()` önmagában is publikus. A kiadott konfiguráció
+  `type + settings + conditionals` sorrendben áll össze, tehát egy kézzel írt `key` legyőzte volna
+  azt, amivel a feltételek kimennek — vissza az INV6/INV12 fail-open ágára.
+- **Két oszlop nem rendereheti ugyanazt a mezőt.** A `columnConfigs` egyetlen, mező szerint
+  kulcsolt map; a második bejegyzés nem az első mellé kerül, hanem a helyére, és a vesztes oszlop
+  szó nélkül a győztes konfigurációját rendereli (INV10).
 
 ### Megjegyzés
 

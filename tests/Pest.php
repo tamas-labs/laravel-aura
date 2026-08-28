@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Assert;
+use TamasLabs\Aura\Cell\CellRules;
 use TamasLabs\Aura\Table\AuraTable;
 use TamasLabs\Aura\Table\Column;
 use TamasLabs\Aura\Table\ColumnGroup;
@@ -86,9 +87,13 @@ function auraHttpRequest(array $payload, string $method = 'POST'): Request
  * @param  list<Column|ColumnGroup>  $columns
  * @return AuraTable<TypedUser>
  */
-function auraTable(array $columns, ?Footer $footer = null, ?TableSettings $settings = null): AuraTable
-{
-    return new InlineTable($columns, $footer, $settings);
+function auraTable(
+    array $columns,
+    ?Footer $footer = null,
+    ?TableSettings $settings = null,
+    ?CellRules $rowRules = null,
+): AuraTable {
+    return new InlineTable($columns, $footer, $settings, $rowRules);
 }
 
 /**
@@ -172,4 +177,18 @@ function auraObject(mixed $value): mixed
 function assertMatchesAuraHeader(array $cells): void
 {
     assertMatchesAuraResponseSchema(auraObject(['header' => ['rows' => [['cells' => $cells]]]]));
+}
+
+/**
+ * Assert that this cell configuration is one Aura would accept, in the smallest
+ * response that can carry it.
+ *
+ * @param  array<string, mixed>  $config
+ */
+function assertMatchesAuraConfig(array $config, string $field = 'demo'): void
+{
+    assertMatchesAuraResponseSchema(auraObject([
+        'header' => ['rows' => [['cells' => [['content' => 'Demo', 'field' => $field, 'key' => $field]]]]],
+        'body' => ['columnConfigs' => [$field => $config]],
+    ]));
 }
