@@ -991,7 +991,9 @@ külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 | **F2** | Query-oldal — kérés → Eloquent → `items`/`meta`/`links` | ✅ kész |
 | **F3** | Definíciós mag: `AuraTable`, `Column`, következtetés, cache | ✅ kész |
 | **F4** | Cella-builderek: badge, link, button, icon, modal, progress, feltételes konfiguráció | ✅ kész |
-| **F5** | Action-réteg (`edit` / `show` / `destroy`) és soronkénti jogosultság | tervezett |
+| **F5a** | Akciók konvenció-módban: `Action`, `Column::actions()` | tervezett |
+| **F5b** | Eszkaláció explicit `columnConfig`-ra, és route-építés | tervezett |
+| **F5c** | Soronkénti jogosultság — a válasz-oldal | tervezett |
 | **F6** | Demo workbench-app, `make:aura-table`, kiadás | tervezett |
 
 ---

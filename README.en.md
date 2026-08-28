@@ -979,7 +979,9 @@ builds this image so the Dockerfile cannot rot.
 | **F2** | Query side — request → Eloquent → `items`/`meta`/`links` | ✅ done |
 | **F3** | Definition core: `AuraTable`, `Column`, inference, caching | ✅ done |
 | **F4** | Cell builders: badge, link, button, icon, modal, progress, conditional configuration | ✅ done |
-| **F5** | Action layer (`edit` / `show` / `destroy`) and per-row permissions | planned |
+| **F5a** | Actions in convention mode: `Action`, `Column::actions()` | planned |
+| **F5b** | Escalation to an explicit `columnConfig`, and route building | planned |
+| **F5c** | Per-row permissions — the response side | planned |
 | **F6** | Demo workbench app, `make:aura-table`, release | planned |
 
 ---
