@@ -50,6 +50,7 @@ abstract class TestCase extends Orchestra
         Schema::create('companies', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
+            $table->string('tier')->nullable();
         });
 
         Schema::create('users', function (Blueprint $table): void {

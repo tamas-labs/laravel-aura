@@ -26,6 +26,16 @@ szerződés verziója külön él a csomagverziótól.
   `composer quality` futtatja mindhármat.
 - **CI**: PHP 8.3/8.4 × Laravel 12/13 mátrix natívan, plusz egy külön job, amely a fejlesztői
   image-et építi és abban futtatja a kaput.
+- **Definíciós mag** (F3): `AuraTable` (a tábla mint osztály, `respond()`-dal), `Column` fluent
+  builder, `ColumnGroup` (kétsoros header), `Footer`, `TableSettings`, `Inference` (oszlop-defaultok
+  a modell castjaiból), `Preset` + `Money` / `Timestamp` / `Options`, `AuraOption` enum-interfész,
+  `TableBlueprint` (a definíció és a whitelist együtt, cache-elhetően).
+- **A `header` és a whitelist egy forrásból.** A `FieldPermissions` az oszlopokból származik, abból
+  a cella-tömbből, amit a böngésző is megkap; az Aura `reference || field || key` sorrendjét
+  követve. Kézzel írt header és kézzel karbantartott whitelist nem kell többé.
+- **Build-idejű őrök** (`InvalidDefinition`): duplikált oszlopkulcs, `fields` oszlop `reference`
+  nélkül, `fields` oszlop a globális keresésben, egyoszlopos csoport, `colspan` nélküli mezőtlen
+  cella, oszlop nélküli tábla.
 - **README** három fájlban, a workspace mintája szerint: `README.md` (rövid, telepítés és
   alapok), `README.en.md` és `README.hu.md` (teljes referencia angolul és magyarul).
 
@@ -38,6 +48,11 @@ szerződés verziója külön él a csomagverziótól.
 - A `LIKE` keresés escape-eli a `%` és `_` karaktereket (`ESCAPE '!'`), így egy `%` a
   keresőmezőben nem alakítja teljes táblaolvasássá a keresést.
 - A `selected[]` nem kerül a lekérdezésbe.
+- A cache-elt definíció nem tud jogosultságot tágítani: egy nem tömb alakú bejegyzés újraépítést
+  vált ki, a whitelist visszaolvasásakor pedig minden nem-string kiesik.
+- Minden adatoszlop a `header.rows` **utolsó** sorába kerül. Az Aura csak onnan veszi az
+  oszlopokat, tehát egy korábbi sorban ragadt `selectable` cella némán kikapcsolná a
+  sor-kijelölést (INV9).
 
 ### Megjegyzés
 

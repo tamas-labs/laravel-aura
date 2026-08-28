@@ -1,38 +1,39 @@
 # laravel-aura
 
 Laravel package that builds the JSON contract consumed by the
-[Aura](https://github.com/tamas-labs/aura) Vue 3 data table — request in, Eloquent query out,
-paginated payload back.
+[Aura](https://github.com/tamas-labs/aura) Vue 3 data table. Declare the table once, as a class,
+and it answers the request.
 
 > 📖 **[Full reference documentation →](./README.en.md)** · 🇭🇺 **[Magyarul →](./README.hu.md)**
-> This short README covers installation and the basics; the full reference (the whitelist, the
-> request contract, the query semantics, relations, the response shape, and the development
-> workflow) lives in [README.en.md](./README.en.md) (English) and [README.hu.md](./README.hu.md)
-> (Hungarian).
+> This short README covers installation and the basics; the full reference (columns, inference,
+> enums, presets, grouped headers, caching, and the query layer underneath) lives in
+> [README.en.md](./README.en.md) (English) and [README.hu.md](./README.hu.md) (Hungarian).
 
 ## What it does
 
-- 🔒 **Whitelisted fields** — every `field` in the request is attacker controlled, so nothing
-  reaches the query except through `FieldPermissions`; an unlisted field is a 422, never a
-  silently ignored parameter
-- 🔎 **Search** — substring or exact, plus range searches with either end open
-- 🎛 **Filter** — multi-value selection, with `NULL` handled rather than silently dropped
-- 🌐 **Global search** across the fields the table declares, grouped so it cannot widen the
+- 🧱 **One class per table** — `query()` and `columns()`, and the endpoint is `respond($request)`
+- 🔒 **The whitelist comes from the columns** — every `field` in the request is attacker
+  controlled, and nothing reaches the query except through a column that offered it; an unlisted
+  field is a 422, never a silently ignored parameter
+- 🪄 **Defaults inferred from the model** — a `decimal` cast means money, a `datetime` cast means
+  a range search, an enum cast means exactly which options the filter may offer
+- 🔎 **Search** (substring, exact, or a range with either end open), **filter** with `NULL`
+  handled rather than silently dropped, and a **global search** grouped so it cannot widen the
   other constraints
-- ↕️ **Sort** on several keys, in the order the user added them
 - 🔗 **Relations** in all four operations — `whereHas` at any depth for search and filter, a
   correlated subquery (never a join, which would corrupt `meta.total`) for sorting
-- 📄 **`items` / `meta` / `links`** straight from a `LengthAwarePaginator`
+- 🧩 **Grouped headers, footers, presets**, and a `Macroable` column builder
+- ⚡ **Cacheable definition** — the header, body and footer do not depend on the request
 - ✅ **Schema-validated** against [`tamas-labs/aura-schema`](https://github.com/tamas-labs/aura-schema)
   in the test suite, offline — no network call, and an unresolvable schema throws
 - 🧪 **PHPStan level `max`**, Pint, Pest — the whole gate in one `composer quality`
 
 ## Status
 
-The query side (**F2**) is complete and tested; the package is usable from here on. The
-**definition core is not built yet** (F3), so the describing half of the response — `header` — is
-a hand-written array you merge with the payload. See
-[Status](./README.en.md#status) for what is and is not in place.
+The definition core (**F3**) is complete: a table is a class and serves a request end to end.
+Cells render as plain text until **F4** brings the nine renderers (badge, link, progress, …); the
+action layer and per-row permissions come in **F5**. See
+[Status](./README.en.md#status) for the full picture.
 
 Not released: no tag, not on Packagist.
 
@@ -64,31 +65,37 @@ php artisan vendor:publish --tag=aura-config
 ## Quick start
 
 ```php
-use TamasLabs\Aura\Query\{AuraQuery, FieldPermissions};
-use TamasLabs\Aura\Request\AuraRequest;
-use TamasLabs\Aura\Response\AuraPayload;
+use TamasLabs\Aura\Table\{AuraTable, Column};
 
-$aura = AuraRequest::fromHttp($request, new FieldPermissions(
-    sortable:     ['last_name', 'created_at', 'company.name'],
-    searchable:   ['first_name', 'last_name', 'balance'],
-    filterable:   ['status'],
-    globalSearch: ['first_name', 'last_name'],
-));
+/**
+ * @extends AuraTable<User>
+ */
+final class UserTable extends AuraTable
+{
+    public function query(): Builder
+    {
+        return User::query()->with('company');
+    }
 
-$payload = AuraPayload::fromPaginator(AuraQuery::paginate(User::query(), $aura));
-
-return response()->json(['header' => $header] + $payload->toArray());
+    public function columns(): array
+    {
+        return [
+            Column::selection(),
+            Column::make('last_name')->sortable()->searchable()->globalSearch(),
+            Column::make('company.name', 'Company')->sortable(),
+            Column::make('status')->filterable(),      // options inferred from the enum cast
+            Column::make('balance')->sortable(),       // currency + right-aligned from the decimal cast
+            Column::make('created_at')->sortable()->searchable(),
+        ];
+    }
+}
 ```
-
-`$header` is yours to write until F3 — a
-[minimal one](./README.en.md#the-other-half-of-the-response-header) is three lines, and the full
-schema lives in the [aura-schema](https://github.com/tamas-labs/aura-schema) package.
-
-Aura fetches with `POST` by default, so route it accordingly:
 
 ```php
-Route::post('/users', UserTableController::class);
+Route::post('/users', fn (Request $request) => (new UserTable)->respond($request));
 ```
+
+That is the whole endpoint. Aura fetches with `POST` by default, so route it accordingly.
 
 ## Configuration
 
@@ -101,18 +108,23 @@ return [
 ];
 ```
 
-There is deliberately no default page size: `paginate` is required by the contract, and
-defaulting a missing one would turn a broken client into a silently short page instead of a 422.
+There is deliberately no default page size: `paginate` is required by the contract, and defaulting
+a missing one would turn a broken client into a silently short page instead of a 422.
 
-## Two things worth knowing up front
+## Three things worth knowing up front
+
+**The header and the whitelist are one definition.** What the browser is offered and what the
+query accepts are derived from the same columns, resolving the field exactly as Aura does
+(`reference || field || key`). Keeping two lists in agreement by hand is the mistake this exists
+to prevent.
 
 **Only `paginate()` works.** The contract requires `meta.last_page` and `meta.total`, which
 neither `simplePaginate()` nor `cursorPaginate()` can supply — passing one raises
 `UnsupportedPaginator` rather than emitting a payload the table cannot read.
 
 **Sorting through a relation is limited to one to-one level.** A join would multiply rows on a
-to-many relation and corrupt the pagination itself, so sorting uses a correlated subquery
-instead. Searching and filtering have no such limit.
+to-many relation and corrupt the pagination itself, so sorting uses a correlated subquery instead.
+Searching and filtering have no such limit.
 
 ## Development
 

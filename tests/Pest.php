@@ -4,7 +4,14 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Assert;
+use TamasLabs\Aura\Table\AuraTable;
+use TamasLabs\Aura\Table\Column;
+use TamasLabs\Aura\Table\ColumnGroup;
+use TamasLabs\Aura\Table\Footer;
+use TamasLabs\Aura\Table\TableSettings;
 use TamasLabs\Aura\Tests\Contract\ContractValidator;
+use TamasLabs\Aura\Tests\Fixtures\InlineTable;
+use TamasLabs\Aura\Tests\Fixtures\TypedUser;
 use TamasLabs\Aura\Tests\TestCase;
 
 uses(TestCase::class)->in(__DIR__);
@@ -71,4 +78,98 @@ function auraHttpRequest(array $payload, string $method = 'POST'): Request
         server: ['CONTENT_TYPE' => 'application/json'],
         content: json_encode($payload, JSON_THROW_ON_ERROR),
     );
+}
+
+/**
+ * A table built from a column list.
+ *
+ * @param  list<Column|ColumnGroup>  $columns
+ * @return AuraTable<TypedUser>
+ */
+function auraTable(array $columns, ?Footer $footer = null, ?TableSettings $settings = null): AuraTable
+{
+    return new InlineTable($columns, $footer, $settings);
+}
+
+/**
+ * Read a value out of a built definition or response by path.
+ *
+ * The definition is `array<string, mixed>` — it has to be, the contract is not a
+ * fixed shape — so every step into it is `mixed`. This narrows once, at the
+ * point where the test says which path it means, and fails with that path rather
+ * than with a type error twelve frames away.
+ */
+function auraDig(mixed $value, string|int ...$path): mixed
+{
+    $walked = [];
+
+    foreach ($path as $step) {
+        $walked[] = (string) $step;
+
+        if (! is_array($value) || ! array_key_exists($step, $value)) {
+            Assert::fail('Nothing at '.implode('.', $walked).' in the payload.');
+        }
+
+        $value = $value[$step];
+    }
+
+    return $value;
+}
+
+/**
+ * The same, where the test needs an array back.
+ *
+ * @return array<array-key, mixed>
+ */
+function auraDigArray(mixed $value, string|int ...$path): array
+{
+    $found = auraDig($value, ...$path);
+
+    Assert::assertIsArray($found, 'Expected an array at '.implode('.', array_map(strval(...), $path)).'.');
+
+    return $found;
+}
+
+/**
+ * The header cell with this key, from a built definition.
+ *
+ * @param  array<string, mixed>  $definition
+ * @return array<string, mixed>|null
+ */
+function auraCell(array $definition, string $key): ?array
+{
+    $header = $definition['header'] ?? [];
+    $rows = is_array($header) ? ($header['rows'] ?? []) : [];
+
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $cells = is_array($row) ? ($row['cells'] ?? []) : [];
+
+        foreach (is_array($cells) ? $cells : [] as $cell) {
+            if (is_array($cell) && ($cell['key'] ?? null) === $key) {
+                /** @var array<string, mixed> $cell */
+                return $cell;
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Re-decode a value the way the browser will receive it — objects, not
+ * associative arrays, because JSON Schema tells `{}` and `[]` apart.
+ */
+function auraObject(mixed $value): mixed
+{
+    return json_decode((string) json_encode($value, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
+}
+
+/**
+ * Assert that these header cells are ones Aura would accept.
+ *
+ * @param  list<array<string, mixed>>  $cells
+ */
+function assertMatchesAuraHeader(array $cells): void
+{
+    assertMatchesAuraResponseSchema(auraObject(['header' => ['rows' => [['cells' => $cells]]]]));
 }

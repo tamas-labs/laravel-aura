@@ -7,8 +7,9 @@ Laravel-csomag, amely azt a JSON-szerződést állítja elő, amit az
 
 Az Aura tábláját teljes egészében JSON vezérli: a végpont mondja meg, milyen oszlopok vannak,
 hogyan renderel egy cella, és mely sorok látszanak. Ez a csomag ennek a beszélgetésnek a
-szerveroldali fele — beolvassa az Aura által küldött kérést, Eloquent-lekérdezéssé alakítja, és a
-szerződés által előírt alakban adja vissza a lapozott adatot.
+szerveroldali fele. A táblát egyszer írod le, osztályként, és az kiszolgálja a kérést: a header,
+amit a böngésző renderel, és a mezők, amiket a lekérdezés elfogad, ugyanabból a definícióból
+származnak — így nem tudnak elcsúszni egymástól.
 
 ---
 
@@ -18,14 +19,21 @@ szerződés által előírt alakban adja vissza a lapozott adatot.
 - [Követelmények](#követelmények)
 - [Telepítés](#telepítés)
 - [Konfiguráció](#konfiguráció)
-- [A három lépés](#a-három-lépés)
-- [FieldPermissions — a whitelist](#fieldpermissions--a-whitelist)
-- [AuraRequest — a kérés beolvasása](#aurarequest--a-kérés-beolvasása)
-- [AuraQuery — a lekérdezés építése](#auraquery--a-lekérdezés-építése)
-- [AuraPayload — a válasz adatfele](#aurapayload--a-válasz-adatfele)
-- [A válasz másik fele: a `header`](#a-válasz-másik-fele-a-header)
+- [Egy tábla definiálása](#egy-tábla-definiálása)
+- [Oszlopok](#oszlopok)
+- [Következtetés a modellből](#következtetés-a-modellből)
+- [Enumok](#enumok)
+- [Presetek](#presetek)
+- [Csoportos header](#csoportos-header)
+- [Footer és beállítások](#footer-és-beállítások)
+- [A definíció cache-elése](#a-definíció-cache-elése)
+- [Amit a tábla nem hajlandó felépíteni](#amit-a-tábla-nem-hajlandó-felépíteni)
+- [A query-réteg önmagában](#a-query-réteg-önmagában)
+  - [FieldPermissions](#fieldpermissions)
+  - [AuraRequest](#aurarequest)
+  - [AuraQuery](#auraquery)
+  - [AuraPayload](#aurapayload)
 - [Kivételek](#kivételek)
-- [Egy teljes controller](#egy-teljes-controller)
 - [A dróton lévő szerződés](#a-dróton-lévő-szerződés)
 - [A saját payloadod validálása](#a-saját-payloadod-validálása)
 - [Fejlesztés](#fejlesztés)
@@ -36,20 +44,21 @@ szerződés által előírt alakban adja vissza a lapozott adatot.
 
 ## Állapot
 
-A csomag a tervének **F2** fázisánál tart: a query-oldal kész és tesztelt, a csomag innentől
-használható. Konkrétan:
+A csomag a tervének **F3** fázisánál tart: a tábla osztály, és végponttól végpontig kiszolgál egy
+kérést.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| Az Aura-kérés beolvasása és validálása | `AuraTable` / `Column` definíciós objektumok (F3) |
-| Rendezés, keresés, szűrés, globális keresés | Oszlop-következtetés a modell castjaiból (F3) |
-| Relációk mind a négy műveletben | Cella-builderek — badge, link, progress, … (F4) |
-| `items` / `meta` / `links` egy paginátorból | Action-oszlopok és soronkénti jogosultság (F5) |
-| Szerződés-validáció a tesztekben | Generált `header` — egyelőre kézzel írod (F3) |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | A kilenc cellatípus — badge, link, progress, … (F4) |
+| Oszlopok, csoportok, footer, tábla-beállítások | Feltételes cella-konfiguráció (F4) |
+| Oszlop-defaultok a modell castjaiból | Action-oszlopok: `edit` / `show` / `destroy` (F5) |
+| A mező-whitelist, az oszlopokból származtatva | Soronkénti jogosultság (F5) |
+| Rendezés, keresés, szűrés, globális keresés | `make:aura-table` és a demo-app (F6) |
+| Relációk mind a négy műveletben | |
+| Cache-elhető, kérésfüggetlen definíció | |
 
-Amíg az F3 el nem készül, a válasz leíró fele (`header`, opcionálisan `body` / `footer`) egy
-kézzel írt tömb, amit összefésülsz a payloaddal. Ez elég egy működő táblához — lásd
-[Egy teljes controller](#egy-teljes-controller).
+A cellák F4-ig sima szövegként renderelnek. Az viszont készen van, hogy *mely* oszlopok vannak,
+hogy hívják őket, hogyan vannak formázva, és mit lehet velük csinálni.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -60,7 +69,7 @@ A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telep�
 - **PHP** 8.3 vagy 8.4
 - **Laravel** 12 vagy 13 (`illuminate/support`, `illuminate/contracts`)
 - Bármilyen Eloquent által támogatott adatbázis-driver; a teszt-suite SQLite-on fut, a `LIKE`
-  escape-elés úgy van megírva, hogy MySQL/MariaDB-n, PostgreSQL-en és SQLite-on egyformán
+  escape-elés pedig úgy van megírva, hogy MySQL/MariaDB-n, PostgreSQL-en és SQLite-on egyformán
   viselkedjen
 
 ---
@@ -81,8 +90,8 @@ A csomag nincs Packagiston, ezért a repóra kell mutatni:
 composer require tamas-labs/laravel-aura:dev-main
 ```
 
-Az `AuraServiceProvider`-t a package discovery regisztrálja — a `bootstrap/providers.php`-hoz
-nem kell hozzányúlni.
+Az `AuraServiceProvider`-t a package discovery regisztrálja — a `bootstrap/providers.php`-hoz nem
+kell hozzányúlni.
 
 A konfigot akkor publikáld, ha az oldalméret-plafont akarod módosítani:
 
@@ -112,88 +121,394 @@ A túl nagy érték **vágódik, nem utasítódik el.** Egy elavult kliens, amel
 oldalméretre emlékszik, 100-zal működik tovább, ahelyett hogy a felhasználó arcába hibázna — a
 plafon az adatbázist védi, és semmit nem nyerünk azzal, ha közben az oldalt is eltörjük.
 
-Alapértelmezett oldalméret szándékosan **nincs.** A kérés-szerződésben a `paginate` kötelező; ha
-a hiányzót defaultolnánk, egy hibás kliensből csendben rövid oldal lenne 422 helyett.
+Alapértelmezett oldalméret szándékosan **nincs.** A kérés-szerződésben a `paginate` kötelező; ha a
+hiányzót defaultolnánk, egy hibás kliensből csendben rövid oldal lenne 422 helyett.
 
-A plafon hívásonként felülírható, ami egy export-végponton jól jön:
+---
+
+## Egy tábla definiálása
 
 ```php
-AuraRequest::fromHttp($request, $fields, maxPaginate: 5000);
+<?php
+
+namespace App\Tables;
+
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use TamasLabs\Aura\Table\AuraTable;
+use TamasLabs\Aura\Table\Column;
+use TamasLabs\Aura\Table\TableSettings;
+
+/**
+ * @extends AuraTable<User>
+ */
+final class UserTable extends AuraTable
+{
+    public function query(): Builder
+    {
+        return User::query()->with('company');
+    }
+
+    public function columns(): array
+    {
+        return [
+            Column::selection(),
+            Column::make('last_name', 'Vezetéknév')->sortable()->searchable()->globalSearch(),
+            Column::make('company.name', 'Cég')->sortable(),
+            Column::make('status', 'Státusz')->filterable(),
+            Column::make('balance', 'Egyenleg')->sortable()->searchable(),
+            Column::make('created_at', 'Létrehozva')->sortable()->searchable(),
+        ];
+    }
+
+    public function settings(): TableSettings
+    {
+        return TableSettings::make()->stickyHeader()->striped()->hoverable();
+    }
+}
+```
+
+```php
+Route::post('/users', fn (Request $request) => (new UserTable)->respond($request));
+```
+
+Ennyi a végpont. Az Aura alapértelmezésben `POST`-tal kér, ezért így vedd fel a route-ot (vagy
+állítsd át a `requestMethod`-ot a kliensen).
+
+A `query()`-be azok a megszorítások valók, amik mindig igazak — tenant-szűkítés, eager load, egy
+`withTrashed()`. Amit a felhasználó választ, arra épül rá.
+
+### Miért osztály, és nem egy hívásfüzér a controllerben
+
+Mert a szerződés két fele ugyanannak a definíciónak két olvasata. A header azt mondja,
+`sortable: true`; a query-réteg dönti el, hogy elfogad-e rendezést arra a mezőre. Külön megírva a
+kettő elcsúszik, és a hiba a rosszabbik irányban csendes: egy oszlop, amit a header felkínál, de
+a whitelist kifelejtett, minden kattintást 422-vé tesz — egy whitelist-bejegyzés viszont, amihez
+nincs oszlop, olyan mező, amit a kliens használhat, pedig a tábla soha nem akarta megmutatni.
+
+Itt a whitelist *abból a cella-tömbből származik, amit a böngésző megkap*, pontosan úgy oldva fel
+a mezőt, ahogy az Aura (`reference || field || key`). Egy teszt végigjárja minden oszlop minden
+műveletét, és összeveti a kettőt.
+
+A másik ok a cache: a header, a body és a footer nem függ a kéréstől, tehát egyszer is
+felépíthető. Egy controllerbeli fluent chain minden lekérésnél újraépítené az egészet.
+
+### Mi jön ki
+
+```php
+(new UserTable)->respond($request);   // header + body + items + meta + links
+(new UserTable)->definition();        // header + body + footer — a kérésfüggetlen fél
+(new UserTable)->permissions();       // a FieldPermissions, amit az oszlopok kijelölnek
 ```
 
 ---
 
-## A három lépés
+## Oszlopok
+
+Egy oszlop egy header-cella. A `Column::make('last_name')` már teljes: a fejléc a mezőnévből lesz
+címsor-formában, a kulcs pedig a mező.
+
+```php
+Column::make('last_name')                    // fejléc: "Last Name"
+Column::make('last_name', 'Vezetéknév')      // explicit fejléc
+Column::selection()                          // a sor-kijelölő checkboxok
+Column::combined('full_name', ['first_name', 'last_name'], 'Név')
+Column::heading('Számla', colspan: 3)        // fejléc több oszlop fölött
+```
+
+### Viselkedés
+
+| Metódus | Hatás |
+| --- | --- |
+| `sortable()` | rendezést kínál, és engedélyezi a query-oldalon |
+| `searchable()` | oszlop-szintű keresőmezőt kínál |
+| `filterable()` | oszlop-szintű szűrő-legördülőt kínál |
+| `between()` | min–max tartománnyal keres, nem kifejezéssel |
+| `globalSearch()` | beveszi a mezőt a toolbar globális keresőjébe |
+| `reference('masik_mezo')` | más mezőn műveletezik, mint amit renderel |
+| `elements([...])` / `options(Enum::class)` | a szűrő-legördülő opciói |
+| `selectable()` | ide kerülnek a sor-kijelölő checkboxok |
+| `show(false)` / `hidden()` | rejtve indul — megjelenítés, soha nem jogosultság |
+
+A `reference()` az, amivel egy renderelt oszlop egy mögöttes szerint rendez: a teljes név oszlop
+`last_name` szerint. Az Aura a küldendő mezőt `reference || field || key` sorrendben oldja fel, és
+a whitelist ugyanezt követi — tehát a reference az, amit a lekérdezés elfogad, nem a renderelt
+mező.
+
+A `hidden()` **nem jogosultság.** A rejtett oszlopot a felhasználó visszakapcsolhatja; amit senki
+nem láthat, az ne legyen benne a `columns()`-ban.
+
+### Elrendezés és formázás
+
+`width()`, `resizable()`, `colspan()`, `rowspan()`, `align()`, `class()`, `style()`,
+`cellClass()`; illetve `number()`, `currency()`, `date()`, `datetime()`, `time()`, `phone()`,
+`slice()`, `uppercase()`, `lowercase()`, `capitalize()`, `monospace()`, `raw()`.
+
+A `cellClass()` a kilógó: az oszlop **adat**celláit stílusozza (`body.columnStyles`), míg a
+`class()` a fejlécet.
+
+### Minden más
+
+A szerződés több header-cella kulcsot definiál, mint ahány metódus itt van. A `set()` és a
+`merge()` mindegyikhez elér, a `data-*` attribútumokat is beleértve:
+
+```php
+Column::make('note')
+    ->set('data-testid', 'note-column')
+    ->merge(['fontWeight' => 700, 'lineHeight' => 1.4]);
+```
+
+A `Column` `Macroable`, tehát egy hívás, amit sokszor ismételsz, saját metódussá válhat.
+
+---
+
+## Következtetés a modellből
+
+A modell már tudja a legtöbbet abból, amire egy oszlopnak szüksége van. Ezt a tábla-definícióban
+megismételni olyan duplikáció, ami elavul — a cast megváltozik, az oszlop pedig csendben a régi
+módon formáz tovább. Ezért a defaultok a modell castjaiból jönnek:
+
+| Cast | Default |
+| --- | --- |
+| `decimal:*` | `currency`, `align: end` |
+| `datetime`, `immutable_datetime`, `timestamp` | `datetime`, és `between`, ha az oszlop kereshető |
+| `date`, `immutable_date` | `date`, és `between`, ha az oszlop kereshető |
+| egy `BackedEnum` osztály | `elements` — a szűrő-legördülő opciói |
+| a modell kulcsneve | a `Column::selection()` mezője |
+
+A pontos mezők egy reláció mélységig oldódnak fel, tehát a `company.tier` a *company* modell
+castját veszi fel.
+
+Három tulajdonság, mindegyikre teszttel:
+
+- **A következtetés csak hézagot tölt ki.** Ugyanazon az ajtón ír, mint a presetek, tehát egy
+  explicit hívás nyer, akármilyen sorrendben történt — a
+  `Column::make('balance')->align('center')` `center` marad, hiába mondana a decimal cast `end`-et.
+- **A `->withoutInference()`** egy oszlopra kikapcsolja, annak a `decimal`-nak a kedvéért, ami
+  súly és nem pénz.
+- **Legjobb szándékú, nem garancia.** Amit nem tud feloldani — számított oszlop, két szint mélyre
+  vitt reláció —, az egyszerűen nem kap defaultot. Rosszul tippelni rosszabb, mint nem tippelni.
+
+---
+
+## Enumok
+
+Egy castként használt backed enum a szűrő-legördülő opcióivá válik. Implementáld az
+`AuraOption`-t, és a feliratok a tieid:
+
+```php
+use TamasLabs\Aura\Contracts\AuraOption;
+
+enum Status: string implements AuraOption
+{
+    case Active = 'active';
+    case Suspended = 'suspended';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Active => __('Aktív'),
+            self::Suspended => __('Felfüggesztett'),
+        };
+    }
+}
+```
+
+```php
+Column::make('status')->filterable();
+// elements: { "active": "Aktív", "suspended": "Felfüggesztett" }
+```
+
+A kulcsok a backing value-k — amit az adatbázis tárol és ami a kérésben utazik —, a feliratok
+pedig az, amit a felhasználó olvas. Az az enum, amelyik **nem** implementálta az interfészt,
+szintén használható listát ad a case-neveiből, tehát ez megfogalmazást vesz, nem viselkedést.
+
+Ha a modell nem castol arra az enumra, kérd közvetlenül: `->options(Status::class)`.
+
+Az opciók az enum case-eiből jönnek, nem a betöltött sorokból. Ez az a különbség, ami számít: a
+sorokból származtatott lista nem tud olyan státuszt felkínálni, ami még senkinél nem szerepel.
+
+---
+
+## Presetek
+
+A preset oszlop-beállítások újrahasznosítható köteg — ez akadályozza meg, hogy ugyanaz a négy
+hívás minden pénzoszlopon megismétlődjön.
+
+```php
+use TamasLabs\Aura\Table\Presets\{Money, Options, Timestamp};
+
+Column::make('minor_units', 'Összesen')->apply(new Money);
+Column::make('archived_at')->searchable()->apply(new Timestamp);
+Column::make('born_on')->apply(Timestamp::date());
+Column::make('plan')->apply(new Options(Tier::class));
+```
+
+| Preset | Amit beállít |
+| --- | --- |
+| `Money` | `currency`, `align: end`, `monospace` |
+| `Timestamp` | `datetime` (vagy `date`), és `between` egy kereshető oszlopon |
+| `Options` | `filterable`, `elements` egy enumból, `align: center` |
+
+A presetek ugyanazon az ajtón írnak, mint a következtetés, tehát egy explicit hívás mindkét
+sorrendben nyer. Sajátot a `Preset::apply(Column $column): void` implementálásával írsz.
+
+---
+
+## Csoportos header
+
+```php
+use TamasLabs\Aura\Table\ColumnGroup;
+
+public function columns(): array
+{
+    return [
+        Column::selection(),
+        ColumnGroup::make('Felhasználó', [Column::make('first_name'), Column::make('last_name')]),
+        ColumnGroup::make('Számla', [Column::make('status'), Column::make('balance')]),
+    ];
+}
+```
+
+Egy csoport deklarálása kétsorossá teszi a headert. A csoport-cella átfogja a gyerekeit; a
+gyerekek a második sorban tartják meg a saját cellájukat.
+
+**Minden adatoszlop az utolsó sorba kerül**, és ez nem stílus kérdése. Az Aura a body oszlopait
+kizárólag a `header.rows[utolsó]` sorból veszi. Egy `rowspan`-nel az első sorban hagyott oszlop
+fejlécet kapna, adatot nem — a body eggyel kevesebb `<td>`-t rajzolna, mint ahány `<th>` van —, az
+ott ragadt `selectable` cella pedig szó nélkül kikapcsolná a sor-kijelölést. Egy csoportosítatlan
+oszlop fölé ezért üres helyőrző cella kerül, nem rowspan.
+
+Az egyoszlopos csoport elutasításra kerül: a szerződés szerint egy mezőt nem nevező cellának
+legalább kettőt kell átfognia, egy egyoszlopos csoport pedig csak egy oszlop fejléccel.
+
+---
+
+## Footer és beállítások
+
+```php
+use TamasLabs\Aura\Table\Footer;
+
+public function footer(): ?Footer
+{
+    return Footer::make(
+        Column::heading('Összesen', colspan: 3),
+        Column::make('balance_total')->align('end'),
+    );
+}
+```
+
+A footer ugyanabból a cellából épül, mint a header, és ugyanaz a séma validálja — beleértve azt a
+szabályt is, hogy a mezőt nem nevező cellának legalább két oszlopot kell átfognia.
+
+```php
+public function settings(): TableSettings
+{
+    return TableSettings::make()
+        ->stickyHeader()->headerHeight('48px')
+        ->striped()->hoverable()
+        ->stickyFooter();
+}
+```
+
+A szerződés ezeket három blokk közt szórja szét: `header.settings`, `body.settings`,
+`footer.settings`. A `TableSettings` összegyűjti őket, és kifelé menet szétosztja; amelyik blokkba
+senki nem állított semmit, az kimarad.
+
+---
+
+## A definíció cache-elése
+
+A header, a body és a footer nem függ a kéréstől. Kapcsold be, és egyszer épül fel:
+
+```php
+final class UserTable extends AuraTable
+{
+    protected bool $cache = true;
+    protected int $cacheTtl = 3600;
+}
+```
+
+```php
+(new UserTable)->forgetCache();   // olyan deploy után, ami az oszlopokat érinti
+```
+
+A definíció **és** a whitelist együtt cache-elődik, mert egy definíció két olvasata; az egyiket a
+másik nélkül cache-elve pont az áll elő, hogy a header olyan rendezést kínál, amit a szerver
+elutasít. A `cacheKey()`-t akkor írd felül, ha egy tábla-osztály több alakot szolgál ki —
+nyelvenként, mondjuk.
+
+Alapból ki van kapcsolva, mert csak akkor biztonságos, ha a `columns()` valóban kérésfüggetlen.
+Egy definíció, ami a bejelentkezett felhasználót, a nyelvet vagy egy feature flaget olvas, annak
+cache-elődik, aki elsőként kérte.
+
+A cache visszafelé nem megbízható forrás: egy bejegyzés, ami nem az általunk írt tömb,
+újraépítést vált ki, és a mezőlistákból minden nem-string kiesik. Egy elavult vagy megpiszkált
+bejegyzés nem tud whitelistet tágítani.
+
+---
+
+## Amit a tábla nem hajlandó felépíteni
+
+Ezek `InvalidDefinition`-ök — `LogicException`, mert egyiket sem tudja előidézni, amit a
+felhasználó csinál. Mindegyik a tábla-osztályban lévő hibát jelent, az első kérésnél, ami
+hozzáér — ahelyett hogy a böngésző rosszat renderelne:
+
+| Elutasítva | Miért |
+| --- | --- |
+| Két oszlop ugyanazzal a kulccsal | a kulcs azonosítja az oszlopot a `columnConfigs`-ban, a `columnStyles`-ban és az Aura oszlop-szintű session-állapotában |
+| `combined()` oszlop `reference` nélkül, rendezhetően vagy kereshetően | az Aura ilyenkor a kulcsra esne vissza, amit az adatbázis nem ismer |
+| `combined()` oszlop a globális keresésben | a `searchableItems` egy header-cella `field`-jét nevezi meg, ennek az oszlopnak pedig nincs |
+| Kettőnél kevesebb oszlopot átfogó csoport | a mezőtlen cellának legalább kettőt kell átfognia |
+| `Column::heading()` `colspan: 1`-gyel | ugyanaz a szabály |
+| Oszlop nélküli tábla | a szerződés legalább egy header-sort kér, legalább egy cellával |
+
+---
+
+## A query-réteg önmagában
+
+Az `AuraTable` három darabra épül, amiket közvetlenül is használhatsz — olyan végponthoz, aminek
+az alakja egyáltalán nem egy tábla-osztályból jön.
 
 ```php
 use TamasLabs\Aura\Query\{AuraQuery, FieldPermissions};
 use TamasLabs\Aura\Request\AuraRequest;
 use TamasLabs\Aura\Response\AuraPayload;
 
-// 1. a kérés beolvasása — validálva és whitelistelve
 $aura = AuraRequest::fromHttp($request, new FieldPermissions(
-    sortable:     ['last_name', 'created_at', 'company.name'],
-    searchable:   ['first_name', 'last_name', 'balance'],
-    filterable:   ['status'],
-    globalSearch: ['first_name', 'last_name', 'company.name'],
-));
-
-// 2. alkalmazás egy lekérdezésre
-$paginator = AuraQuery::paginate(User::query(), $aura);
-
-// 3. a válasz alakra hozása
-$payload = AuraPayload::fromPaginator($paginator);
-```
-
-A három lépés független egymástól. Az `AuraQuery::apply()` a megszorított buildert adja vissza, ha
-magad akarsz lapozni; az `AuraPayload::fromPaginator()` bármilyen length-aware paginátort elfogad,
-akkor is, ha nem az `AuraQuery` állította elő.
-
----
-
-## FieldPermissions — a whitelist
-
-Az Aura-kérésben minden `field` a böngészőből érkezik. Ha ilyet adunk közvetlenül az `orderBy()`-nak,
-azzal kiszivárogtatjuk olyan oszlopok létezését — a rendezésen keresztül pedig a sorrendjét is —,
-amiket a tábla soha nem akart megmutatni. A `FieldPermissions` a whitelist, és **kizárólag** ezen
-keresztül jut kliens-mező a lekérdezésbe.
-
-```php
-new FieldPermissions(
-    sortable:     ['last_name', 'created_at', 'company.name'],
+    sortable:     ['last_name', 'created_at'],
     searchable:   ['first_name', 'last_name'],
     filterable:   ['status'],
     globalSearch: ['first_name', 'last_name'],
-);
+));
+
+$payload = AuraPayload::fromPaginator(AuraQuery::paginate(User::query(), $aura));
+
+return ['header' => $kezzelIrtHeader] + $payload->toArray();
 ```
 
-| Argumentum | Mit szabályoz |
-| --- | --- |
-| `sortable` | mely mezőket nevezheti meg a `sortable[].field` |
-| `searchable` | mely mezőket nevezheti meg a `searchable[].field` |
-| `filterable` | mely mezőket nevezheti meg a `filterable[].field` |
-| `globalSearch` | mely mezőkre terjed ki a toolbar globális keresője |
+Így használva a headert és a whitelistet kézzel kell szinkronban tartani — pont ezt hivatott
+megszüntetni az `AuraTable`.
 
-Négy tulajdonság érvényes, és mindegyiket teszt rögzíti:
+### FieldPermissions
+
+Az Aura-kérésben minden `field` a böngészőből érkezik. Ha ilyet adunk közvetlenül az `orderBy()`-nak,
+azzal kiszivárogtatjuk olyan oszlopok létezését — a rendezésen keresztül a sorrendjét is —, amiket
+a tábla soha nem akart megmutatni. A `FieldPermissions` a whitelist, és **kizárólag** ezen
+keresztül jut kliens-mező a lekérdezésbe. Egy tábla-osztály az oszlopaiból építi; kézzel csak itt
+kell.
+
+Négy tulajdonság érvényes, mindegyiket teszt rögzíti:
 
 - **A listák külön élnek.** Attól, hogy egy mező kereshető, még nem rendezhető.
 - **Az üres lista semmit nem enged.** „Engedj mindent" kapcsoló nincs, és a
-  `FieldPermissions::none()` — semmi nem engedélyezett — a biztonságos kiindulópont.
-- **Az egyezés pontos.** A `last` nem engedélyezett a `last_name` miatt; egy engedélyezett név
-  prefixe ugyanúgy elutasításra kerül, mint bármelyik ismeretlen mező.
+  `FieldPermissions::none()` a biztonságos kiindulópont.
+- **Az egyezés pontos.** A `last` nem engedélyezett a `last_name` miatt.
 - **Az elutasított mező 422**, nem csendben eldobott paraméter. A hibaüzenet megnevezi az
   elutasított mezőt, de soha nem sorolja fel az engedélyezetteket — egy hibaválasz nem arra való,
   hogy felsoroljuk benne a sémát.
 
-A `globalSearch` más természetű, mint a másik három: nem egy kérésbeli értéket ellenőriz, hanem
-*ő maga* a mezőlista, amin a keresés fut. A kliens csak egy keresőkifejezést küld.
-
-A pontos nevek (`company.name`) megengedettek, és a reláción keresztül oldódnak fel — lásd
-[Relációk](#relációk).
-
----
-
-## AuraRequest — a kérés beolvasása
+### AuraRequest
 
 ```php
 AuraRequest::fromHttp(Request $request, FieldPermissions $fields, ?int $maxPaginate = null): self
@@ -201,13 +516,8 @@ AuraRequest::fromArray(array $payload, FieldPermissions $fields, ?int $maxPagina
 ```
 
 A `fromHttp` onnan olvassa a payloadot, ahová a szerződés teszi: `POST` / `PUT` / `PATCH` esetén a
-JSON-törzsből, `GET` / `DELETE` esetén a query-paraméterekből. A `fromArray` egy már dekódolt
-tömböt vesz át — sorbaállított jobhoz vagy teszthez.
-
-Mindkettő `Illuminate\Validation\ValidationException`-t dob mindenre, amit a szerződés nem enged,
-amit a Laravel **422**-ként renderel — soha nem 500, és soha nem csendben eldobott paraméter.
-
-### A kérés alakja
+JSON-törzsből, `GET` / `DELETE` esetén a query-paraméterekből. Mindkettő `ValidationException`-t —
+**422**-t — dob mindenre, amit a szerződés nem enged.
 
 | Kulcs | Típus | Kötelező | Megjegyzés |
 | --- | --- | --- | --- |
@@ -219,114 +529,58 @@ amit a Laravel **422**-ként renderel — soha nem 500, és soha nem csendben el
 | `globalSearch` | string | nem | |
 | `selected[]` | string / szám | nem | sor-azonosítók a köteges műveletekhez |
 
-Az ismeretlen property elutasításra kerül — a legfelső szinten *és* a beágyazott objektumokban is,
-mert a séma mindkettőn `additionalProperties: false`-t ír elő. A beágyazott ellenőrzés
-szándékosan a nyers payloadon fut: a Laravel validátora eldob minden kulcsot, amihez nincs
-szabálya, így mire a validáció lefut, egy ismeretlen beágyazott kulcs már eltűnt volna, és soha
-nem lehetne jelenteni.
+Az ismeretlen property elutasításra kerül — a legfelső szinten *és* a beágyazott objektumokban is.
+A beágyazott ellenőrzés szándékosan a nyers payloadon fut: a Laravel validátora eldob minden
+kulcsot, amihez nincs szabálya, így mire a validáció lefut, egy ismeretlen beágyazott kulcs már
+eltűnt volna, és soha nem lehetne jelenteni.
 
-### A feldolgozott eredmény
-
-```php
-$aura->page;         // int
-$aura->paginate;     // int, már vágva
-$aura->sortable;     // list<Sort>    — field, direction
-$aura->searchable;   // list<Search>  — field, term, exact, min, max, isRange()
-$aura->filterable;   // list<Filter>  — field, values
-$aura->globalSearch; // ?string
-$aura->selected;     // list<string|int|float>
-$aura->fields;       // a FieldPermissions, amivel készült
-```
-
-### A `selected` nem kerül a lekérdezésbe
-
-A `selected[]` a felhasználó által kipipált sorokat nevezi meg, a hívó saját köteges műveleteihez.
-A DTO-n elérhető, de a lekérdezés közelébe sem megy — teszt rögzíti, hogy a generált SQL
-bájtazonos vele és nélküle. A lapot a kijelölésre szűkíteni két okból is hibás lenne: a kijelölés
-átnyúlhat több oldalra, és a felhasználó nem ezt kérte.
+**A `selected` nem kerül a lekérdezésbe.** A felhasználó által kipipált sorokat nevezi meg, a hívó
+saját köteges műveleteihez; teszt rögzíti, hogy a generált SQL azonos vele és nélküle. A lapot a
+kijelölésre szűkíteni két okból is hibás lenne: a kijelölés átnyúlhat több oldalra, és a
+felhasználó nem ezt kérte.
 
 ```php
 User::whereKey($aura->selected)->each->archive();
 ```
 
-### Az `exact` query stringben
-
-A query string minden értéket szövegként hoz, az `exact=true`-t is, a Laravel `boolean` szabálya
-viszont a `"true"` *szót* nem fogadja el. A query-paraméteres ág ezért ezt az egy értéket
-dekódolja a validálás előtt. A JSON-törzses ág nem: ott a `"true"` string valóban
-szerződésszegés, és az is marad.
-
----
-
-## AuraQuery — a lekérdezés építése
+### AuraQuery
 
 ```php
 AuraQuery::apply(Builder $query, AuraRequest $request): Builder
 AuraQuery::paginate(Builder $query, AuraRequest $request): LengthAwarePaginator
 ```
 
-Az `apply()` a kereséseket, szűréseket, a globális keresést és a rendezéseket adja hozzá az átadott
-builderhez, és visszaadja azt. A `paginate()` ugyanezt teszi, majd lapoz a kérés `page` és
-`paginate` értékével.
-
-Ebben az osztályban semmi nem ellenőrzi újra a jogosultságot — minden ideérkező mező már átment a
-whitelisten —, de semmi nem is fogad el mezőt máshonnan.
-
-### Keresés
-
-Egy `searchable[]` bejegyzés vagy **szöveges keresés**, vagy **tartománykeresés**:
+**Keresés.** Egy `searchable[]` bejegyzés vagy szöveges keresés, vagy tartománykeresés:
 
 | Amit küld | SQL |
 | --- | --- |
 | `{field, term}` | `LIKE '%term%'` — részszöveg, escape-elt wildcardokkal |
 | `{field, term, exact: true}` | `= 'term'` |
 | `{field, min, max}` | `>= min` és `<= max` |
-| `{field, min}` | `>= min` — nyitott felső vég |
-| `{field, max}` | `<= max` — nyitott alsó vég |
+| `{field, min}` vagy `{field, max}` | egy nyitott vég |
 
 A tartomány bármelyik végén a `null` azt jelenti: *korlátlan*, nem azt, hogy *illeszkedjen a
 null-ra*. Az üres vagy hiányzó keresőkifejezés semmilyen megszorítást nem ad hozzá — nem pedig
 mindenre illeszkedik.
 
 **A keresőkifejezésben lévő wildcardok escape-elve vannak.** Nélküle egy `%` keresőkifejezés
-minden sorra illeszkedik — ez nem injekció (a kifejezés továbbra is bindingként utazik), hanem egy
-keresőmező, ami csendben teljes táblaolvasássá válik, és egy `100%` keresés, ami az `1000`-et is
-visszaadja.
+minden sorra illeszkedik — ez nem injekció (a kifejezés bindingként utazik), hanem egy keresőmező,
+ami csendben teljes táblaolvasássá válik, és egy `100%` keresés, ami az `1000`-et is visszaadja.
+Az escape-karakter `!`, nem backslash: a MySQL és az SQLite nem ért egyet abban, hogy a
+stringliterálon belüli backslash maga is escape-e. Az `AuraQuery::likeExpression()` a csomag
+egyetlen raw SQL-je, és viszi magával az indoklást.
 
-Az escape-karakter `!`, nem backslash. A MySQL és az SQLite nem ért egyet abban, hogy a
-stringliterálon belüli backslash maga is escape-e, így az `ESCAPE '\'` a kettőn mást jelent; a `!`
-minden dialektusban egy karakter. Az `AuraQuery::likeExpression()` a csomag egyetlen raw SQL-je, és
-viszi magával az indoklást — az oszlop a whitelistről jön, majd a grammar wrapeli, a
-keresőkifejezés pedig bindingként utazik, soha nincs beinterpolálva.
+**Szűrés.** A `{field, values}` arra a sorra illeszkedik, amelynek az oszlopa a felsorolt értékek
+bármelyikével egyenlő. A `null` köztük `OR column IS NULL`-t ad hozzá — az `IN (…)` soha nem
+illeszkedik `NULL`-ra, így egy kiválasztott „nincs érték" különben csendben pont azokat a sorokat
+dobná el, amiket a felhasználó kért. Az üres `values` tömb semmire nem illeszkedik, mert az üres
+kijelölés ezt jelenti.
 
-### Szűrés
+**Globális keresés.** Egy keresőkifejezés, `OR`-ral összefűzve a deklarált mezőkön, saját
+beágyazott `where`-be csomagolva, hogy az OR-ok ne tudjanak kiszabadulni és kitágítani a
+körülöttük lévő oszlop-szintű megszorításokat.
 
-A `{field, values}` arra a sorra illeszkedik, amelynek az oszlopa a felsorolt értékek bármelyikével
-egyenlő.
-
-- **A `null` az értékek között** `OR column IS NULL`-t ad hozzá. Az `IN (…)` soha nem illeszkedik
-  `NULL`-ra, így egy kiválasztott „nincs érték" különben csendben pont azokat a sorokat dobná el,
-  amiket a felhasználó kért.
-- **Az üres `values` tömb semmire nem illeszkedik**, mert az üres kijelölés ezt jelenti. Ezért a
-  validációs szabály `present` és nem `required` — a Laravel az üres tömböt hiányzónak veszi, a
-  szerződés viszont megköveteli a kulcsot, és megengedi az üres kijelölést.
-
-### Globális keresés
-
-Egy keresőkifejezés, `OR`-ral összefűzve a `FieldPermissions::$globalSearch` minden mezőjén,
-ugyanazzal az escape-elt `LIKE`-kal, mint a szöveges keresés. Az OR-ok saját beágyazott `where`-be
-vannak csomagolva, hogy ne tudjanak kiszabadulni és kitágítani a körülöttük lévő oszlop-szintű
-megszorításokat — teszt rögzíti, hogy egy globális keresés nem tud feltámasztani egy szűrő által
-kizárt sort.
-
-### Rendezés
-
-A rendezések abban a sorrendben érvényesülnek, ahogy a kliens küldte őket, így a második
-rendezési kulcs az elsőben lévő holtversenyt bontja.
-
-### Relációk
-
-A pontos mező az általa megnevezett reláción keresztül oldódik fel:
+**Relációk.** A pontos mező az általa megnevezett reláción keresztül oldódik fel:
 
 | Művelet | Mechanizmus | Mélység | Relációtípusok |
 | --- | --- | --- | --- |
@@ -337,78 +591,24 @@ A pontos mező az általa megnevezett reláción keresztül oldódik fel:
 
 A rendezés a korlátozott, szándékosan. A join olvashatóbb lenne, de to-many reláción
 megsokszorozza a sorokat — ez pedig elrontja a `meta.total`-t és minden oldal tartalmát, vagyis
-magát a lapozást töri el. A korrelált alkérdésnek nincs ilyen hatása, és nem kell hozzá a
-select-listát bűvészkedni; az ára, hogy csak to-one relációra, egy szint mélységben válaszol.
+magát a lapozást töri el. A korrelált alkérdésnek nincs ilyen hatása; az ára, hogy csak to-one
+relációra, egy szint mélységben válaszol. Bármi más `UnsupportedRelation`-t dob, konkrét
+javaslattal.
 
-Bármi más `UnsupportedRelation`-t dob fejlesztéskor, konkrét javaslattal:
-
-```
-Cannot sort by "posts.title": posts.title is a HasMany, and a to-many relation has no single
-value to order on. Expose the value as a real column (a counter cache or a computed column)
-and sort on that.
-```
-
----
-
-## AuraPayload — a válasz adatfele
+### AuraPayload
 
 ```php
 AuraPayload::fromPaginator(Paginator|CursorPaginator $paginator): self
 $payload->toArray(): array   // ['items' => …, 'meta' => …, 'links' => …]
 ```
 
-Az `items` a sorok nyers adattá lapítva (amit lehet, `Arrayable`-ként `toArray()`-el), majd
-`array_values`-szal újraindexelve — egy lyukas kulcsú paginátor-oldal JSON-objektummá
-szerializálódna tömb helyett, a szerződés viszont tömbként tipizálja az `items`-et.
+Az `items` a sorok nyers adattá lapítva, `array_values`-szal újraindexelve — egy lyukas kulcsú
+paginátor-oldal JSON-objektummá szerializálódna tömb helyett.
 
-A `meta` a `current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total` kulcsokat viszi;
-a `links` a `first`, `last`, `prev`, `next` kulcsokat.
-
-**Csak a `LengthAwarePaginator` működik.** Az Aura szerződése megköveteli a `meta.last_page`-et és
-a `meta.total`-t, ezeket viszont sem a `simplePaginate()`, sem a `cursorPaginate()` nem ismeri,
-mert egyik sem futtatja le a count-lekérdezést. Ilyet átadva `UnsupportedPaginator` dobódik, nem
-pedig egy olyan payload keletkezik, amit a tábla nem tud beolvasni:
-
-```
-Aura needs a LengthAwarePaginator, got Illuminate\Pagination\Paginator. The response contract
-requires meta.last_page and meta.total, which simplePaginate() and cursorPaginate() cannot
-supply — use paginate().
-```
-
----
-
-## A válasz másik fele: a `header`
-
-Az `AuraPayload` az adatfél. Önmagában **nem érvényes válasz** — a szerződés megköveteli a
-`header`-t, ami az oszlopokat írja le. Amíg az F3 nem generálja, írd meg kézzel, és fésüld össze:
-
-```php
-$header = [
-    'rows' => [[
-        'cells' => [
-            ['content' => '#',      'key' => 'id',        'field' => 'id', 'sortable' => true],
-            ['content' => 'Név',    'key' => 'last_name', 'field' => 'last_name',
-             'sortable' => true, 'searchable' => true],
-            ['content' => 'Státusz', 'key' => 'status',   'field' => 'status',
-             'filterable' => true, 'elements' => ['active' => 'Aktív', 'suspended' => 'Felfüggesztett']],
-        ],
-    ]],
-];
-
-return response()->json(['header' => $header] + $payload->toArray());
-```
-
-Két dolgot kell kézzel szinkronban tartani, amíg az F3 meg nem érkezik:
-
-- **A headernek és a whitelistnek egyeznie kell.** Egy oszlop, ami a headerben `sortable`, de
-  hiányzik a `FieldPermissions::$sortable`-ből, olyan táblát ad, ahol a rendezőnyilak 422-t
-  hoznak.
-- **A `header.settings.searchableItems`** azokat a mezőket sorolja, amikre a globális keresőmező
-  kiterjed a kliensen; ennek egyeznie kell a `FieldPermissions::$globalSearch`-csel.
-
-A teljes header-, body- és footer-séma a
-[`tamas-labs/aura-schema`](https://github.com/tamas-labs/aura-schema) csomagban él, teljes
-kidolgozott példával a `schema/examples/response.json` alatt.
+**Csak a `LengthAwarePaginator` működik.** A szerződés megköveteli a `meta.last_page`-et és a
+`meta.total`-t, ezeket viszont sem a `simplePaginate()`, sem a `cursorPaginate()` nem ismeri, mert
+egyik sem futtatja le a count-lekérdezést. Ilyet átadva `UnsupportedPaginator` dobódik, nem pedig
+egy olyan payload keletkezik, amit a tábla nem tud beolvasni.
 
 ---
 
@@ -419,67 +619,12 @@ Minden kivétel, amit ez a csomag a saját nevében dob, implementálja a
 
 | Kivétel | Mikor dobódik |
 | --- | --- |
+| `InvalidDefinition` | maga a tábla-definíció hibás — lásd [a fenti táblázatot](#amit-a-tábla-nem-hajlandó-felépíteni) |
 | `UnsupportedRelation` | to-many reláción vagy beágyazott relációs úton keresztüli rendezés |
 | `UnsupportedPaginator` | a paginátor nem tudja a `last_page` / `total` értéket |
 
 Mindegyik a **tábla definíciójában** lévő hibát jelent, nem a kliens inputjában lévőt — a hibás
-input jóval előbb elbukik a validáción és 422 lesz belőle. Ezért futásidejű kivételek, és ezért
-nem kérésenként elkapandók.
-
----
-
-## Egy teljes controller
-
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Models\User;
-use Illuminate\Http\Request;
-use TamasLabs\Aura\Query\{AuraQuery, FieldPermissions};
-use TamasLabs\Aura\Request\AuraRequest;
-use TamasLabs\Aura\Response\AuraPayload;
-
-final class UserTableController
-{
-    public function __invoke(Request $request)
-    {
-        $aura = AuraRequest::fromHttp($request, new FieldPermissions(
-            sortable:     ['last_name', 'created_at', 'company.name'],
-            searchable:   ['first_name', 'last_name', 'balance'],
-            filterable:   ['status'],
-            globalSearch: ['first_name', 'last_name', 'company.name'],
-        ));
-
-        $payload = AuraPayload::fromPaginator(
-            AuraQuery::paginate(User::query()->with('company'), $aura),
-        );
-
-        return response()->json(['header' => $this->header()] + $payload->toArray());
-    }
-
-    private function header(): array
-    {
-        return ['rows' => [['cells' => [
-            ['content' => 'Név',      'key' => 'last_name',  'field' => 'last_name',  'sortable' => true, 'searchable' => true],
-            ['content' => 'Cég',      'key' => 'company',    'field' => 'company.name', 'sortable' => true],
-            ['content' => 'Státusz',  'key' => 'status',     'field' => 'status',     'filterable' => true],
-            ['content' => 'Létrehozva', 'key' => 'created_at', 'field' => 'created_at', 'sortable' => true, 'datetime' => true],
-        ]]]];
-    }
-}
-```
-
-Az Aura alapértelmezésben `POST`-tal kér, ezért így vedd fel a route-ot (vagy állítsd át a
-`requestMethod`-ot a kliensen):
-
-```php
-Route::post('/users', UserTableController::class);
-```
-
-A `with('company')` nem a reláción keresztüli rendezés miatt kell (azt az alkérdés intézi), hanem
-azért, hogy ne legyen N+1, amikor a sorok kiírják a cégnevet.
+input jóval előbb elbukik a validáción, és 422 lesz belőle.
 
 ---
 
@@ -566,13 +711,10 @@ külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 | **F0** | Docker és repo-alap | ✅ kész |
 | **F1** | Contract-teszt harness | ✅ kész |
 | **F2** | Query-oldal — kérés → Eloquent → `items`/`meta`/`links` | ✅ kész |
-| **F3** | Definíciós mag: `AuraTable`, `Column`, következtetés a castokból, cache-elhető `header` | tervezett |
+| **F3** | Definíciós mag: `AuraTable`, `Column`, következtetés, cache | ✅ kész |
 | **F4** | Cella-builderek: badge, link, button, icon, modal, progress, feltételes konfiguráció | tervezett |
 | **F5** | Action-réteg (`edit` / `show` / `destroy`) és soronkénti jogosultság | tervezett |
 | **F6** | Demo workbench-app, `make:aura-table`, kiadás | tervezett |
-
-Az F3 az, ami megszünteti a kézzel írt headert: egy oszlop-definíció egy sorrá válik, a modell
-castjaiból következtetve, a válasz kérésfüggetlen fele pedig cache-elhetővé.
 
 ---
 
