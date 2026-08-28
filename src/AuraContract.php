@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace TamasLabs\Aura;
 
 /**
- * The wire contract this package speaks, as published in `.claude/docs/schema/`.
+ * The wire contract this package speaks, as published in `tamas-labs/aura-schema`.
  *
  * Nothing is sent over the wire under this name today — the response schema sets
  * `additionalProperties: true`, so a version field can be added later without a
- * breaking change. Until then this constant is where the version lives, and what
- * the contract tests assert against.
+ * breaking change.
+ *
+ * The schema package is a dev dependency, so runtime code cannot read
+ * `AuraSchema::VERSION` directly; this constant restates it, and
+ * `ContractSchemaTest` fails the moment the two disagree.
  */
 final class AuraContract
 {

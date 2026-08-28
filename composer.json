@@ -1,7 +1,12 @@
 {
     "name": "tamas-labs/laravel-aura",
     "description": "Laravel package that builds the JSON contract consumed by the Aura Vue data table.",
-    "keywords": ["laravel", "aura", "datatable", "json-schema"],
+    "keywords": [
+        "laravel",
+        "aura",
+        "datatable",
+        "json-schema"
+    ],
     "license": "MIT",
     "type": "library",
     "authors": [
@@ -21,7 +26,17 @@
         "opis/json-schema": "^2.3",
         "orchestra/testbench": "^10.0 || ^11.0",
         "pestphp/pest": "^3.0 || ^4.0",
-        "pestphp/pest-plugin-laravel": "^3.0 || ^4.0"
+        "pestphp/pest-plugin-laravel": "^3.0 || ^4.0",
+        "tamas-labs/aura-schema": "dev-main"
+    },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/tamas-labs/aura-schema"
+        }
+    ],
+    "suggest": {
+        "tamas-labs/aura-schema": "Validate generated payloads against the Aura wire contract at runtime during development."
     },
     "autoload": {
         "psr-4": {

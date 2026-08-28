@@ -5,6 +5,6 @@ composer.lock
 .phpunit.result.cache
 .DS_Store
 
+# The Claude Code environment stays local — it is not part of the published package.
 .claude
 CLAUDE.md
-Dockerfile
