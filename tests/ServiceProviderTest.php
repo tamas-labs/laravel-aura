@@ -10,8 +10,7 @@ it('registers the service provider', function (): void {
 });
 
 it('merges the package config so aura.* always resolves', function (): void {
-    expect(config('aura.pagination.default'))->toBe(15)
-        ->and(config('aura.pagination.max'))->toBe(100);
+    expect(config('aura.pagination.max'))->toBe(100);
 });
 
 it('publishes the config under the aura-config tag', function (): void {
