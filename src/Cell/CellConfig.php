@@ -117,6 +117,21 @@ abstract class CellConfig extends ConditionalBuilder
     }
 
     /**
+     * The `key` to emit when {@see self::needsKey()} holds.
+     *
+     * Defaults to the field the configuration is attached to, which is what a
+     * mapping selects on. A type whose `key` means something else — the row
+     * field a route is built from, say — overrides this.
+     *
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $headerCell
+     */
+    protected function keyFor(string $field, array $settings, array $headerCell): string
+    {
+        return $field;
+    }
+
+    /**
      * Last chance to fill in settings that need the field or the heading.
      *
      * Called on the copy {@see self::resolve()} works on, never on the builder
@@ -161,6 +176,63 @@ abstract class CellConfig extends ConditionalBuilder
     }
 
     /**
+     * Give every leaf branch the `key` its renderer needs.
+     *
+     * A conditional configuration cannot carry that `key` at the root: there it
+     * is the condition selector, and `stripLogicProps` removes it before the
+     * renderer sees the config. `stripBranchProps` keeps the branch's own, so
+     * that is where it has to go — which matters exactly once, and silently:
+     * `renderIconNode` wraps the glyph in an `<a>` only when `route` **and**
+     * `key` are both present, so a per-row condition over a linking icon would
+     * hide the cell correctly and then render the surviving rows without their
+     * link.
+     *
+     * The decision is made per branch, against the settings that branch is
+     * actually resolved with (Aura merges the branch over the base), because
+     * the route may sit in the branch and not in the base.
+     *
+     * @param  array<string, mixed>  $headerCell
+     * @param  array<string, mixed>  $base  The settings a branch is merged over.
+     */
+    private function keyBranches(string $field, array $headerCell, array $base): void
+    {
+        foreach ($this->branches as $entry) {
+            $entry['branch']->keyAsBranch($field, $headerCell, $base);
+        }
+
+        if ($this->else instanceof self) {
+            $this->else->keyAsBranch($field, $headerCell, $base);
+        }
+    }
+
+    /**
+     * This configuration seen as one branch of the one above it.
+     *
+     * A branch that has conditions of its own is not a leaf: its `key` is the
+     * selector for the level below and gets stripped in turn, so the search
+     * carries on downwards instead of stopping here.
+     *
+     * @param  array<string, mixed>  $headerCell
+     * @param  array<string, mixed>  $base
+     */
+    private function keyAsBranch(string $field, array $headerCell, array $base): void
+    {
+        $settings = array_merge($base, $this->settings());
+
+        if ($this->isConditional()) {
+            $this->keyBranches($field, $headerCell, $settings);
+
+            return;
+        }
+
+        if ($this->conditionKey !== null || ! $this->needsKey($settings)) {
+            return;
+        }
+
+        $this->conditionKey = $this->keyFor($field, $settings, $headerCell);
+    }
+
+    /**
      * Conditional styling of the `<td>` this content sits in.
      */
     public function rules(CellRules $rules): static
@@ -197,10 +269,14 @@ abstract class CellConfig extends ConditionalBuilder
 
         $config->assertRenderable($settings);
 
+        if ($config->isConditional()) {
+            $config->keyBranches($field, $headerCell, $settings);
+        }
+
         $resolved = ['type' => $config->type()] + $settings + $config->conditionals($field);
 
         if (! array_key_exists('key', $resolved) && $config->needsKey($settings)) {
-            $resolved['key'] = $field;
+            $resolved['key'] = $config->keyFor($field, $settings, $headerCell);
         }
 
         if ($config->cellRules instanceof CellRules) {

@@ -44,6 +44,24 @@ trait HasRoute
     }
 
     /**
+     * The first `{placeholder}` of a route template — the row field the URL is
+     * built from, and the name Aura's own preprocessor gives the generated
+     * config's `key`.
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    protected static function routePlaceholder(array $settings): ?string
+    {
+        $route = $settings['route'] ?? null;
+
+        if (! is_string($route) || preg_match(self::PLACEHOLDER, $route, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
+    /**
      * @throws InvalidDefinition
      */
     private static function assertRelative(string $route): void

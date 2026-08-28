@@ -583,6 +583,31 @@ too — it would survive into the URL as literal text. What the package cannot c
 placeholder filled with something containing a dot (an email address, say) makes a mess of the
 path.
 
+**An icon needs a `key` before Aura will make it a link.** `renderIconNode` wraps the glyph in an
+`<a>` only when `route` *and* `key` are both present — `link`, `button` and `modal` need the route
+alone. The package emits it for you, named after the route's first placeholder (`id` for
+`users.{id}.edit`), falling back to the column's key for a route with none, exactly as Aura's own
+preprocessor does. When a mapping is also present the key stays the mapping's selector: that is
+the only role in which its *value* is read, and the link only needs one to exist.
+
+That key cannot live at the root of a **conditional** configuration, where `key` names the field
+the conditions read and Aura strips it before the renderer runs (`stripLogicProps`). So each
+branch gets its own, decided against the settings that branch resolves with — the route may sit in
+the branch and not in the base. Without this a per-row condition over a linking icon would hide
+the cell correctly and then render every allowed row without its link:
+
+```php
+Icon::make('pencil')->route('users.{id}.edit')->on('can_edit')
+    ->when(Condition::isTrue(), fn (Icon $i) => $i);
+
+// {"type":"icon","icon":"pencil","route":"users.{id}.edit",
+//  "key":"can_edit","if":[{"true":true,"key":"id"}]}
+//                                      ^ the route key, where Aura keeps it
+```
+
+A branch given its own `on()` keeps it, and a branch that has conditions of its own is not a leaf
+— its `key` is the selector for the level below, and the search carries on downwards.
+
 ### Bootstrap in the contract
 
 `class`, `text` and the Bootstrap colour names (`primary`, `success`, `danger`, …) are contract

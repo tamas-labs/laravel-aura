@@ -88,9 +88,40 @@ final class Icon extends CellConfig
         return $this->set('title', $title);
     }
 
+    /**
+     * A mapping selects on `key` — and so, uniquely among the linking
+     * renderers, does the link itself: `renderIconNode` wraps the glyph in an
+     * `<a>` only when `route` **and** `key` are both present, while `link`,
+     * `button` and `modal` need the route alone. Without this an icon with a
+     * route renders as a bare glyph and navigates nowhere, in silence.
+     */
     protected function needsKey(array $settings): bool
     {
-        return array_key_exists('mapping', $settings);
+        return array_key_exists('mapping', $settings) || array_key_exists('route', $settings);
+    }
+
+    /**
+     * The mapping selector wins when there is one, because that is the only
+     * role in which the *value* of `key` is read; the link only needs it to be
+     * there. Otherwise the key names the row field the route is built from,
+     * falling back to the column's key exactly as Aura's preprocessor does for
+     * a route with no placeholder of its own (`create`).
+     */
+    protected function keyFor(string $field, array $settings, array $headerCell): string
+    {
+        if (array_key_exists('mapping', $settings)) {
+            return $field;
+        }
+
+        $placeholder = self::routePlaceholder($settings);
+
+        if ($placeholder !== null) {
+            return $placeholder;
+        }
+
+        $cellKey = $headerCell['key'] ?? null;
+
+        return is_string($cellKey) && $cellKey !== '' ? $cellKey : $field;
     }
 
     protected function requires(): array

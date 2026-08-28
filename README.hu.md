@@ -587,6 +587,32 @@ szintén elutasításra kerül — az szó szerint bennmaradna az URL-ben. Amit 
 ellenőrizni, az az érték: egy pontot tartalmazó behelyettesítés (mondjuk egy e-mail cím) szétszedi
 az útvonalat.
 
+**Egy ikonból csak `key`-jel lesz link.** A `renderIconNode` akkor csomagolja `<a>`-ba a glifát, ha
+a `route` **és** a `key` is megvan — a `link`, a `button` és a `modal` beéri a route-tal. A csomag
+kiadja helyetted, a route első placeholderéről elnevezve (`users.{id}.edit` → `id`), placeholder
+nélküli route-nál pedig az oszlop kulcsáról, pontosan úgy, ahogy az Aura saját preprocesszora. Ha
+mapping is van, a kulcs a mapping szelektora marad: az az egyetlen szerep, amiben az *értékét* is
+olvassák, a linknek elég, hogy létezzen.
+
+**Feltételes** konfigurációnál ez a kulcs nem maradhat a gyökérben: ott a `key` a feltételek által
+olvasott mezőt jelöli, és az Aura eltávolítja, mielőtt a renderelő elindulna (`stripLogicProps`).
+Ezért minden ág megkapja a sajátját, azok szerint a beállítások szerint, amikkel az az ág valóban
+feloldódik — a route lehet az ágban is, nem csak az alapban. Enélkül egy soronkénti feltétel a
+linkelő ikon fölött szabályosan elrejtené a cellát, majd minden engedélyezett sort link nélkül
+renderelne:
+
+```php
+Icon::make('pencil')->route('users.{id}.edit')->on('can_edit')
+    ->when(Condition::isTrue(), fn (Icon $i) => $i);
+
+// {"type":"icon","icon":"pencil","route":"users.{id}.edit",
+//  "key":"can_edit","if":[{"true":true,"key":"id"}]}
+//                                      ^ a route kulcsa, ott, ahol az Aura megtartja
+```
+
+A saját `on()`-t kapott ág megtartja a magáét, a saját feltételekkel bíró ág pedig nem levél — az ő
+`key`-je az alatta lévő szint szelektora, a keresés eggyel lejjebb folytatódik.
+
 ### Bootstrap a szerződésben
 
 A `class`, a `text` és a Bootstrap-színnevek (`primary`, `success`, `danger`, …) a szerződés

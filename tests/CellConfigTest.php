@@ -133,6 +133,95 @@ it('leaves the key off a config that has a field to select on', function (): voi
         ->and($resolved['field'])->toBe('status');
 });
 
+it('emits the key an icon needs before Aura will make it a link', function (): void {
+    // renderIconNode wraps the glyph in an <a> only when `route` AND `key` are
+    // both present; link, button and modal go through action-node-helpers and
+    // need the route alone. Without the key the icon renders and navigates
+    // nowhere, with nothing said about it anywhere.
+    $resolved = Icon::make('pencil')->route('users.{id}.edit')->resolve('edit_icon');
+
+    expect($resolved['key'])->toBe('id');
+
+    assertMatchesAuraConfig($resolved, 'edit_icon');
+});
+
+it('names the icon key after the column when the route has no placeholder', function (): void {
+    // What Aura's own preprocessor does for `create`, which needs no id: it
+    // attaches the cell key regardless, purely so the anchor gets built.
+    $resolved = Icon::make('plus')->route('users.create')->resolve('create_icon', ['key' => 'id']);
+
+    expect($resolved['key'])->toBe('id');
+});
+
+it('lets a mapping keep the key it selects on, route or no route', function (): void {
+    // The value of `key` is read only by the mapping; the link just needs one.
+    $resolved = Icon::make()
+        ->mapping(['active' => ['icon' => 'check']])
+        ->route('users.{id}.edit')
+        ->resolve('status');
+
+    expect($resolved['key'])->toBe('status');
+});
+
+it('carries the route key into a branch, because the root key is stripped', function (): void {
+    // stripLogicProps removes the root `key` — there it selects the condition
+    // field — so a per-row condition over a linking icon would hide the cell
+    // correctly and then render the allowed rows without their link.
+    $config = Icon::make('pencil')->route('users.{id}.edit')->on('can_edit')
+        ->when(Condition::isTrue(), fn (Icon $i): Icon => $i);
+
+    $resolved = $config->resolve('edit_icon');
+
+    expect($resolved['key'])->toBe('can_edit')
+        ->and(auraDigArray($resolved, 'if', 0))->toBe(['true' => true, 'key' => 'id'])
+        ->and($config->resolve('edit_icon'))->toBe($resolved);
+
+    assertMatchesAuraConfig($resolved, 'edit_icon');
+});
+
+it('keys the else branch too, which renders just as much', function (): void {
+    $resolved = Icon::make('pencil')->route('users.{id}.edit')->on('can_edit')
+        ->when(Condition::isTrue(), fn (Icon $i): Icon => $i)
+        ->otherwise(fn (Icon $i): Icon => $i->color('muted'))
+        ->resolve('edit_icon');
+
+    expect(auraDigArray($resolved, 'else'))->toBe(['color' => 'muted', 'key' => 'id']);
+});
+
+it('keys a branch that carries the route itself', function (): void {
+    // The decision is per branch, against the settings that branch resolves
+    // with: the base here has no route at all.
+    $resolved = Icon::make('pencil')->on('status')
+        ->when(Condition::eq('draft'), fn (Icon $i): Icon => $i->route('posts.{id}.edit'))
+        ->resolve('edit_icon');
+
+    expect(auraDigArray($resolved, 'if', 0))
+        ->toBe(['eq' => 'draft', 'route' => 'posts.{id}.edit', 'key' => 'id']);
+});
+
+it('leaves a branch key the caller named alone', function (): void {
+    $resolved = Icon::make('pencil')->route('users.{id}.edit')->on('can_edit')
+        ->when(Condition::isTrue(), fn (Icon $i): Icon => $i->on('uuid'))
+        ->resolve('edit_icon');
+
+    expect(auraDigArray($resolved, 'if', 0))->toBe(['true' => true, 'key' => 'uuid']);
+});
+
+it('leaves a nested selector alone and keys the leaf below it', function (): void {
+    // A branch with conditions of its own is not a leaf: its `key` is stripped
+    // in turn, one level further down.
+    $resolved = Icon::make('pencil')->route('users.{id}.edit')->on('can_edit')
+        ->when(Condition::isTrue(), fn (Icon $i): Icon => $i->on('tier')
+            ->when(Condition::eq('gold'), fn (Icon $x): Icon => $x->color('warning')))
+        ->resolve('edit_icon');
+
+    $branch = auraDigArray($resolved, 'if', 0);
+
+    expect($branch['key'])->toBe('tier')
+        ->and(auraDigArray($branch, 'if', 0))
+        ->toBe(['eq' => 'gold', 'color' => 'warning', 'key' => 'id']);
+});
+
 it('nests a trigger of any type inside a modal', function (): void {
     $resolved = Modal::destroy()
         ->route('users.{id}.destroy')

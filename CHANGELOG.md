@@ -64,6 +64,14 @@ szerződés verziója külön él a csomagverziótól.
   mostantól az ágakon is előkészülnek.
 - **A `resolve()` nem írja át a buildert, amin meghívták.** A `Modal` a beágyazott triggert
   korábban `$this`-be írta, mielőtt a másolat elkészült volna; a `prepare()` horog a másolaton fut.
+- **A route-os `Icon` nem lett link.** A `renderIconNode` csak akkor csomagolja `<a>`-ba a glifát,
+  ha a `route` *és* a `key` is megvan (a `link`, a `button` és a `modal` beéri a route-tal), a
+  csomag viszont csak mappinghez adott ki `key`-t. Mostantól route esetén is kiadja, a route első
+  placeholderéről elnevezve — placeholder nélkül az oszlop kulcsáról, ahogy az Aura preprocesszora.
+- **Feltételes konfigurációnál a route kulcsa az ágba kerül.** A gyökér `key`-t az Aura eltávolítja
+  (`stripLogicProps`) — ott a feltételek mezőjét jelöli —, tehát egy soronkénti feltétel a linkelő
+  ikon fölött szabályosan elrejtette a cellát, majd az engedélyezett sorokat link nélkül
+  renderelte. Minden levél-ág a saját kulcsát kapja, annak az ágnak a beállításai szerint.
 
 ### Biztonság
 
