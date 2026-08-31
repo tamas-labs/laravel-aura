@@ -24,6 +24,18 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Módosítva
 
+- **Az `AuraTable` szétbontva** (692 → 222 sor), az F5 action-rétege előtt, amely ugyanide írna.
+  Négy új `@internal` osztály a `Table\` névtérben, viselkedésváltozás nélkül: `DefinitionBuilder`
+  (a definíció, a whitelist és a numerikus mezők egy menetben), `CellConfigs` (a `columnConfigs`
+  térkép), `ColumnPermissions` (a whitelist, kiolvasva a cellákból) és `ResolvedColumn` (az oszlop
+  és a belőle lett header-cella párja — eddig nyolc helyen destrukturált tuple volt). Az
+  `AuraTable` maga már csak a tábláról felel: oszlopok, modell, beállítások, cache, `respond()`.
+    - A header `searchableItems`-e mostantól **magáról a whitelistről** olvasódik le, nem egy
+      második, ugyanúgy felépített listáról — a „egy forrás" tulajdonság strukturális lett.
+    - Bizonyítva: a definíció, a whitelist, a `numericFields` és a hibaüzenetek bitre azonosak a
+      refaktor előtti kimenettel, több táblán (csoportos header, footer, mind a kilenc cellatípus,
+      feltételek, cellaszabályok) és négy hibaágon.
+
 - **`AuraRequest::fromHttp()` / `fromArray()` harmadik paramétere `?int $maxPaginate` helyett
   `?RequestLimits $limits`.** A `paginate` plafonja változatlanul az `aura.pagination.max`, csak már
   a többi korláttal együtt utazik, és egyetlen limit felülírása nem dobja el a többit.
