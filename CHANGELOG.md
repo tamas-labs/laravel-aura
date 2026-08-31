@@ -22,6 +22,19 @@ szerződés verziója külön él a csomagverziótól.
       lista, amire a szerver nem tud plafont származtatni — a kijelölés túléli a lapozást. Hiányzó
       vagy nem pozitív configérték a csomagolt alapértékre esik vissza, nem a „nincs korlát"-ra.
 
+### Javítva
+
+- **A header-séma negyedik strukturális szabálya is ellenőrizve.** A `field` és a `fields`
+  kölcsönösen kizárja egymást (`not: {required: [field, fields]}`), és a `Column::assertValid()`
+  eddig a négy szabályból hármat nézett. A `set('fields', …)` escape-hatchen át kiadható volt egy
+  olyan header-cella, ami a válaszsémán elbukik — és az Aura saját validációján az egész táblát
+  viszi, nem az egy oszlopot. Mostantól `InvalidDefinition`.
+- **Feltételes cella-szabály többmezős oszlopon `->on()` nélkül build-időben dob.** A szabályok
+  kulcsa ilyenkor az oszlopkulcs lett (`full_name`), ami nem érték a sorban: az Aura `undefined`-ot
+  olvas, minden feltétel hamis, és a cella soha nem stílusozódik — jelzés nélkül. A csomag a
+  `columnConfigs` analóg esetére eddig is dobott (`configNeedsMatchingKey`), erre nem. A
+  feltétel nélküli szabályhalmaz továbbra is rendben van: az `key`-t sem emittál.
+
 ### Módosítva
 
 - **Az `AuraTable` szétbontva** (692 → 222 sor), az F5 action-rétege előtt, amely ugyanide írna.

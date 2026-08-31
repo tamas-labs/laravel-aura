@@ -156,6 +156,15 @@ final class CellConfigs
             throw InvalidDefinition::configNeedsMatchingKey($key, $field);
         }
 
+        // A multi-field column has no field for the conditions to fall back on,
+        // so `$read` below would be the column key — a name the rows do not
+        // carry. Aura reads `undefined`, every condition is false, and the cell
+        // is never styled, with nothing said anywhere. Unconditional rules are
+        // fine: they emit no `key` at all.
+        if ($fields !== null && $rules->isConditional() && $rules->conditionField() === null) {
+            throw InvalidDefinition::rulesNeedField($key);
+        }
+
         $read = $field ?? $key;
 
         $this->configs[$key] = self::withRules(

@@ -756,9 +756,11 @@ letting the browser render the wrong thing:
 | `Column::heading()` with `colspan: 1` | same rule |
 | A table with no columns | the contract requires at least one header row with at least one cell |
 | An empty-string heading | the contract wants a non-empty string or `null`; an empty one fails Aura's own validation and takes the whole table down |
+| A cell naming both `field` and `fields` | the contract allows one or the other (`not: {required: [field, fields]}`); a cell carrying both fails Aura's own validation the same way |
 | A cell configuration on a column whose key and field differ | the renderer is read under the field and the cell rules under the key, so only half of it would be used |
 | A single configuration on a `combined()` column | Aura renders one segment per member field and looks each up by name — use `configure()` |
 | `configure()` naming a field the column does not read | there is no segment for it |
+| Conditional cell rules on a `combined()` column with no `->on()` | the conditions would be keyed by the column key, which is not a value in the row: every condition false, nothing ever styled, silently |
 | A configuration that renders nothing (`Text` with no value, `Icon` with no glyph, `Modal` with no trigger) | the cell would come out empty |
 | Conditions nested more than five deep | Aura resolves five and silently renders the truncated configuration |
 | Conditions with no field to read | without a `key` Aura skips them and applies the base configuration — fail-open |

@@ -196,3 +196,18 @@ it('refuses a heading that is an empty string rather than no heading', function 
     // response validation rejects the whole table over the one cell.
     cell(Column::make('edit', ''));
 })->throws(InvalidDefinition::class, 'empty string');
+
+it('refuses a cell that names both a field and a fields list', function (): void {
+    // The fourth structural rule of the header schema, and the only one that was
+    // not checked: `not: {required: [field, fields]}`. A cell carrying both
+    // fails Aura's own response validation, which takes down the whole table
+    // rather than the one column.
+    Column::make('last_name')->set('fields', ['first_name', 'last_name'])->resolve(null);
+})->throws(InvalidDefinition::class, 'never from both');
+
+it('refuses a selection column that was also given several fields', function (): void {
+    // Reached through inference rather than the escape hatch: a selection column
+    // has its `field` filled in from the model key, so `fields` beside it lands
+    // in the same invalid cell.
+    Column::selection()->set('fields', ['a', 'b'])->resolve(new TypedUser);
+})->throws(InvalidDefinition::class, 'never from both');

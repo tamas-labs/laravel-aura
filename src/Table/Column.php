@@ -687,7 +687,7 @@ final class Column
     }
 
     /**
-     * The three structural rules the header schema states about a cell, checked
+     * The four structural rules the header schema states about a cell, checked
      * here so a broken definition fails on the server rather than rendering
      * wrongly in the browser.
      *
@@ -699,16 +699,23 @@ final class Column
     {
         $content = isset($cell['content']) && is_string($cell['content']) ? $cell['content'] : null;
         $hasField = isset($cell['field']) && is_string($cell['field']);
+        $rawKey = $cell['key'] ?? null;
+        $hasKey = is_string($rawKey);
+        $key = is_string($rawKey) ? $rawKey : '';
 
         if ($content === '') {
-            $key = isset($cell['key']) && is_string($cell['key']) ? $cell['key'] : '';
-
             throw InvalidDefinition::emptyHeading($key);
         }
 
         $hasFields = isset($cell['fields']) && is_array($cell['fields']);
 
-        if ($hasFields && ! (isset($cell['key']) && is_string($cell['key']))) {
+        // Checked in the schema's own order: mutual exclusion first, then the
+        // key `fields` requires, then the colspan a grouping cell requires.
+        if ($hasField && $hasFields) {
+            throw InvalidDefinition::fieldAndFields($key);
+        }
+
+        if ($hasFields && ! $hasKey) {
             throw InvalidDefinition::missingField($content);
         }
 

@@ -260,3 +260,36 @@ it('survives the cache with its renderers and its numeric fields intact', functi
     expect($restored->definition)->toBe($blueprint->definition)
         ->and($restored->numericFields)->toBe(['balance']);
 });
+
+it('refuses conditional cell rules on a multi-field column with no field to read', function (): void {
+    // Without ->on(), the conditions would be keyed by the column key — a name
+    // the rows do not carry. Aura reads undefined, every condition is false, and
+    // the cell is never styled, with nothing said anywhere.
+    auraTable([
+        Column::combined('name', ['first_name', 'last_name'])
+            ->rules(CellRules::make()->when(Condition::eq('suspended'), fn (CellRules $r): CellRules => $r->opacity(0.5))),
+    ])->definition();
+})->throws(InvalidDefinition::class, 'no single field to read');
+
+it('accepts unconditional cell rules on a multi-field column, which emit no key', function (): void {
+    // Nothing to fall back on and nothing that needs it: an unconditional rule
+    // set is plain formatting, and `conditionals()` emits no `key` for it.
+    $configs = auraConfigs(auraTable([
+        Column::combined('name', ['first_name', 'last_name'])
+            ->rules(CellRules::make()->opacity(0.5)),
+    ]));
+
+    $rules = auraDigArray(auraDigArray($configs, 'name'), 'cellRules');
+
+    expect($rules)->toBe(['opacity' => 0.5])
+        ->and($rules)->not->toHaveKey('key');
+});
+
+it('still accepts cell rules on a multi-field column that name their field', function (): void {
+    $configs = auraConfigs(auraTable([
+        Column::combined('name', ['first_name', 'last_name'])
+            ->rules(CellRules::make()->on('status')->when(Condition::eq('suspended'), fn (CellRules $r): CellRules => $r->opacity(0.5))),
+    ]));
+
+    expect(auraDigArray(auraDigArray($configs, 'name'), 'cellRules')['key'])->toBe('status');
+});

@@ -267,6 +267,43 @@ final class InvalidDefinition extends LogicException implements AuraException
     }
 
     /**
+     * The header schema states four structural rules about a cell, and this is
+     * the fourth: `field` and `fields` are mutually exclusive
+     * (`not: {required: [field, fields]}`). Reachable only through the `set()`
+     * escape hatch, which is exactly why it is checked — a cell carrying both
+     * fails Aura's own response validation, which takes the whole table down
+     * rather than the one column.
+     */
+    public static function fieldAndFields(string $key): self
+    {
+        return new self(sprintf(
+            'Column "%s" names both a field and a fields list, and the contract allows only one: '
+            .'a cell reads its value from "field" or from "fields", never from both. '
+            .'Use Column::make() for a single field and Column::combined() for several.',
+            $key,
+        ));
+    }
+
+    /**
+     * Cell rules on a multi-field column have no field to fall back on.
+     *
+     * The rules are keyed by the column key, and for a multi-field column that
+     * key is a name the rows have never heard of — so Aura reads `undefined`,
+     * every condition is false, and nothing is ever styled. Silently.
+     */
+    public static function rulesNeedField(string $key): self
+    {
+        return new self(sprintf(
+            'Column "%s" reads several fields, so its cell rules have no single field to read. '
+            .'Aura would evaluate the conditions against "%s", which is a column key and not a '
+            .'value in the row: every condition would be false and nothing would ever be styled. '
+            .'Name the field the rules read with ->on(\'field\').',
+            $key,
+            $key,
+        ));
+    }
+
+    /**
      * A column has to name its source, unless it is a grouping cell.
      */
     public static function missingField(?string $content): self

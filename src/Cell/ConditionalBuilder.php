@@ -246,6 +246,19 @@ abstract class ConditionalBuilder
     }
 
     /**
+     * The field {@see self::on()} named, if the caller named one.
+     *
+     * Read by the table, which has to know whether the conditions can fall back
+     * to the column's own field — a multi-field column has none to offer.
+     *
+     * @internal
+     */
+    public function conditionField(): ?string
+    {
+        return $this->conditionKey;
+    }
+
+    /**
      * A fresh instance of this builder, to be configured as one branch.
      *
      * A branch is a partial configuration — the schema waives the "one of these

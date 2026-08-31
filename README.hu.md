@@ -762,9 +762,11 @@ hozzáér — ahelyett hogy a böngésző rosszat renderelne:
 | `Column::heading()` `colspan: 1`-gyel | ugyanaz a szabály |
 | Oszlop nélküli tábla | a szerződés legalább egy header-sort kér, legalább egy cellával |
 | Üres stringes fejléc | a szerződés nem üres stringet vagy `null`-t vár; az üres az Aura saját validációján bukik el, és az egész táblát viszi |
+| Cella, ami `field`-et és `fields`-et is megnevez | a szerződés a kettő közül egyet enged (`not: {required: [field, fields]}`); a mindkettőt vivő cella ugyanígy bukik az Aura validációján |
 | Cella-konfiguráció olyan oszlopon, ahol a `key` és a `field` eltér | a renderelőt a mező, a cella-szabályokat a kulcs alól olvassa, tehát csak a fele érvényesülne |
 | Egyetlen konfiguráció `combined()` oszlopon | az Aura tagmezőnként renderel szegmenst, és mindegyiket név szerint keresi — `configure()` kell |
 | `configure()` olyan mezőre, amit az oszlop nem olvas | nincs hozzá szegmens |
+| Feltételes cella-szabály `combined()` oszlopon `->on()` nélkül | a feltételek az oszlopkulcs alá kerülnének, ami nem érték a sorban: minden feltétel hamis, semmi nem stílusozódik, némán |
 | Konfiguráció, ami semmit nem renderel (`Text` érték nélkül, `Icon` ikon nélkül, `Modal` trigger nélkül) | a cella üresen jönne ki |
 | Ötnél mélyebbre ágyazott feltételek | az Aura ötöt old fel, és a csonkolt konfigurációt rendereli, némán |
 | Feltételek, amiknek nincs olvasandó mezőjük | `key` nélkül az Aura átugorja őket, és az alapkonfigurációt érvényesíti — fail-open |
