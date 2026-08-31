@@ -304,6 +304,114 @@ final class InvalidDefinition extends LogicException implements AuraException
     }
 
     /**
+     * An action column with no actions is a heading with nothing under it, and
+     * `fields: []` fails the schema's own `minItems: 1`.
+     */
+    public static function noActions(string $key): self
+    {
+        return new self(sprintf(
+            'Column::actions(\'%s\') was given no actions. Name at least one — Action::show(), '
+            .'Action::edit(), Action::create() or Action::destroy() — or leave the column out.',
+            $key,
+        ));
+    }
+
+    /**
+     * `fields` is typed `minItems: 1`, and Aura only treats a cell as a column
+     * when it names something (`TableBody.tsx`: `cell.field || cell.fields.length`).
+     */
+    public static function emptyFields(string $key): self
+    {
+        return new self(sprintf(
+            'Column "%s" names an empty fields list. A multi-field column has to read at least one '
+            .'field; Aura would not treat this cell as a column at all, and the contract rejects it.',
+            $key,
+        ));
+    }
+
+    /**
+     * The action column's key is the route placeholder Aura substitutes per
+     * row, so it is not a free choice — the other column is the one that can
+     * move.
+     */
+    public static function actionKeyTaken(string $key, bool $selection = false): self
+    {
+        // The selection column is the collision almost every table hits: its
+        // key defaults to the model's primary key, which is exactly the
+        // placeholder an action column needs. Say what is safe to change.
+        $advice = $selection
+            ? 'Re-key the selection column — Column::selection()->key(\'select\') — which changes nothing '
+                .'about the selection itself: Aura reads the row id from that column\'s field '
+                .'(resolve-row-id.ts), never from its key.'
+            : 'Give the other column an explicit key() instead — a key only identifies the column in the '
+                .'payload, and sorting and searching still travel by field.';
+
+        return new self(sprintf(
+            'The action column keys on "%s", and another column already uses that key. An action '
+            .'column\'s key is not a name: Aura writes it into the generated route as the placeholder '
+            .'({base}/{%s}/edit) and fills it from the item field of the same name, so it has to stay '
+            .'the identifier. %s',
+            $key,
+            $key,
+            $advice,
+        ));
+    }
+
+    /**
+     * Sorting, searching or filtering a column of links asks the server to
+     * operate on a field that exists nowhere but the URL.
+     */
+    public static function actionColumnOperable(string $key, string $operation): self
+    {
+        $verb = match ($operation) {
+            'sortable' => 'sort by',
+            'searchable' => 'search',
+            'filterable' => 'filter by',
+            default => 'search globally',
+        };
+
+        return new self(sprintf(
+            'The action column "%s" is marked %s, but its fields are routes rather than data — there '
+            .'is no column behind them to %s. Put the flag on the column that shows the value.',
+            $key,
+            $operation,
+            $verb,
+        ));
+    }
+
+    /**
+     * A resource-action field name outside an action column: Aura would build
+     * a route for it against whatever key that cell happens to carry.
+     */
+    public static function actionFieldOutsideActionColumn(string $key, string $field): self
+    {
+        return new self(sprintf(
+            'Column "%s" names the field "%s", which Aura reads as a built-in resource action and '
+            .'turns into a route of its own. Declare it with Column::actions(), which states the '
+            .'route placeholder explicitly — or rename the field if it really is data.',
+            $key,
+            $field,
+        ));
+    }
+
+    /**
+     * `columnConfigs` is a flat map keyed by field, so the second occurrence of
+     * an action does not get a second entry — it gets the first one's, built
+     * with the first cell's key.
+     */
+    public static function duplicateAction(string $field, string $first, string $second): self
+    {
+        return new self(sprintf(
+            'The action "%s" appears in both column "%s" and column "%s". Aura generates one '
+            .'configuration per field name, so the second column would silently render the first '
+            .'column\'s route — built with the first column\'s key. Offer the action once.',
+            $field,
+            $first,
+            $second,
+        ));
+    }
+
+    /**
      * A column has to name its source, unless it is a grouping cell.
      */
     public static function missingField(?string $content): self

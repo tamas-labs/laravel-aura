@@ -70,6 +70,32 @@ final readonly class ResolvedColumn
     }
 
     /**
+     * Every field this cell names, whether it names one or several.
+     *
+     * @return list<string>
+     */
+    public function declaredFields(): array
+    {
+        $fields = $this->fields();
+
+        if ($fields !== null) {
+            return $fields;
+        }
+
+        $field = $this->field();
+
+        return $field === null ? [] : [$field];
+    }
+
+    /**
+     * Was this column built by {@see Column::actions()}?
+     */
+    public function isActionColumn(): bool
+    {
+        return $this->column->isActionColumn();
+    }
+
+    /**
      * Is this header-cell flag set?
      */
     public function flag(string $key): bool

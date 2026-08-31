@@ -32,6 +32,8 @@ fields the query will accept come out of the same definition, so they cannot dri
   - [Cell and row rules](#cell-and-row-rules)
   - [Routes](#routes)
   - [Bootstrap in the contract](#bootstrap-in-the-contract)
+- [Action columns](#action-columns)
+  - [The key is a placeholder, not a name](#the-key-is-a-placeholder-not-a-name)
 - [Grouped headers](#grouped-headers)
 - [Footers and settings](#footers-and-settings)
 - [Caching the definition](#caching-the-definition)
@@ -53,23 +55,24 @@ fields the query will accept come out of the same definition, so they cannot dri
 
 ## Status
 
-The package is at **F4** of its plan: a table is a class, it serves a request end to end, and its
-cells render as more than text.
+The package is at **F5a** of its plan: a table is a class, it serves a request end to end, its
+cells render as more than text, and the four resource actions are one call.
 
 | Works today | Not built yet |
 | --- | --- |
-| `AuraTable` — one class per table, `respond($request)` | Action columns: `edit` / `show` / `destroy` in convention mode (F5) |
-| Columns, groups, footers, table settings | Per-row permissions (F5) |
+| `AuraTable` — one class per table, `respond($request)` | Routes and glyphs of your own on an action (F5b) |
+| Columns, groups, footers, table settings | Per-row permissions (F5c) |
 | Column defaults inferred from the model's casts | `make:aura-table` and the demo app (F6) |
 | The field whitelist, derived from the columns | |
 | Sorting, searching, filtering, global search | |
 | Relations in all four operations | |
 | The nine cell renderers, with conditions and cell rules | |
+| Action columns in convention mode — `create` / `show` / `edit` / `destroy` | |
 | A cacheable, request-independent definition | |
 
-Action columns can be built today — `Icon`, `Button` and `Modal` with a route are all it takes.
-What F5 adds is the convention that names the routes for you, and the per-row permission machinery
-that decides which rows get one.
+An action column that needs anything of its own can still be built by hand today: `Icon`, `Button`
+and `Modal` with a route are all it takes. What F5b adds is the escalation that does it for you,
+and F5c the per-row permission machinery that decides which rows get a link at all.
 
 The package is **not released**: no tag, not on Packagist. Install it from the repository.
 
@@ -253,6 +256,7 @@ Column::make('last_name', 'Vezetéknév')      // explicit heading
 Column::selection()                          // the row-selection checkboxes
 Column::combined('full_name', ['first_name', 'last_name'], 'Name')
 Column::heading('Account', colspan: 3)       // a heading over other columns
+Column::actions('id', Action::edit())        // the resource links — see Action columns
 ```
 
 ### Behaviour
@@ -649,6 +653,73 @@ side, so a raw CSS class passed as an icon name renders nothing.
 
 ---
 
+## Action columns
+
+Aura builds the resource links itself. A header cell naming a field called `edit_icon`, with no
+configuration anywhere for it, makes the browser generate one: the glyph from the host app's icon
+registry, and the route from the resource base it already holds. Convention mode is the server
+saying **which** actions a column offers, and stopping there.
+
+```php
+use TamasLabs\Aura\Table\{Action, Column};
+
+Column::actions('id', Action::show(), Action::edit(), Action::destroy())
+```
+
+One header cell comes out, and nothing else:
+
+```json
+{ "content": null, "key": "id", "fields": ["show_icon", "edit_icon", "destroy_icon"] }
+```
+
+No `body.columnConfigs` entry, and no extra key in the rows.
+
+| Action | Route the browser builds | Renders as |
+| --- | --- | --- |
+| `Action::create()` | `{base}/create` | link |
+| `Action::show()` | `{base}/{key}` | link |
+| `Action::edit()` | `{base}/{key}/edit` | link |
+| `Action::destroy()` | `{base}/{key}/destroy` | a trigger for Aura's built-in confirmation modal |
+
+`{base}` is `urlParameter`, an Aura **client** config prop. The server never sees it, which is both
+why convention mode can be this thin and the limit of what it can do: a route of your own, a
+different glyph, a modal id — those need a full configuration, and that is F5b.
+
+`create` is the odd one. Its route carries no placeholder, yet Aura renders it in every row. That
+is the client's behaviour, reproduced rather than corrected; a create button belongs in the toolbar.
+
+Column methods still work on the cell itself — a heading, an alignment, a width:
+
+```php
+Column::actions('id', Action::edit(), Action::destroy())
+    ->content('Actions')
+    ->align('end')
+    ->width('90px');
+```
+
+### The key is a placeholder, not a name
+
+`Column::actions('id', …)` does not key the column `id` for tidiness. Aura writes that key into the
+route it generates — `{base}/{id}/edit` — and fills it per row from the item field of the same
+name. The key has to be the identifier the rows actually carry, which is normally the primary key.
+
+So no other column may hold it, and the collision nearly every table meets first is the selection
+column, whose key defaults to the model's primary key as well:
+
+```php
+Column::selection()->key('select'),          // ← re-key this one
+Column::actions('id', Action::edit()),
+```
+
+Re-keying the selection column changes nothing about the selection: Aura reads the row id from that
+column's `field`, never from its key (`resolve-row-id.ts`). A key only identifies a column inside
+the payload.
+
+The same holds for a visible `id` column — `Column::make('id')->key('identifier')` — which keeps
+sorting and searching by `id`, because those travel by field.
+
+---
+
 ## Grouped headers
 
 ```php
@@ -767,6 +838,12 @@ letting the browser render the wrong thing:
 | An absolute route, or a placeholder outside `[\w.]+` | Aura turns every dot into a slash, so `route()`'s URL becomes a path; an unmatched placeholder stays in the URL verbatim |
 | Two columns rendering the same field | `columnConfigs` is one flat map keyed by field, so the second entry replaces the first and the losing column renders the winner's configuration |
 | `merge()` or `set()` naming `type`, `key`, `if` or `else` | those decide how everything else is read; a hand-written `key` beats the emitted one and takes the conditions with it |
+| An action column whose key another column already holds | the key is the route placeholder Aura fills per row, so it is not free to change — the other column is |
+| The same action in two columns, or twice in one | Aura generates one configuration per field name, so the second occurrence silently inherits the first one's route, built with the first one's key |
+| An action field name (`edit_icon`, `destroy_link`, …) outside `Column::actions()` | Aura would build a route onto that cell against whatever key it happens to carry, and the column's own value would never render |
+| An action column marked `sortable`, `searchable`, `filterable` or `globalSearch` | those flags reach the whitelist, and there is no database column behind an icon |
+| `Column::actions()` with no actions | `fields` is typed `minItems: 1`, and Aura only treats a cell as a column when it names something |
+| A `combined()` column with an empty `fields` | same rule |
 
 ---
 
@@ -1061,7 +1138,7 @@ builds this image so the Dockerfile cannot rot.
 | **F2** | Query side — request → Eloquent → `items`/`meta`/`links` | ✅ done |
 | **F3** | Definition core: `AuraTable`, `Column`, inference, caching | ✅ done |
 | **F4** | Cell builders: badge, link, button, icon, modal, progress, conditional configuration | ✅ done |
-| **F5a** | Actions in convention mode: `Action`, `Column::actions()` | planned |
+| **F5a** | Actions in convention mode: `Action`, `Column::actions()` | ✅ done |
 | **F5b** | Escalation to an explicit `columnConfig`, and route building | planned |
 | **F5c** | Per-row permissions — the response side | planned |
 | **F6** | Demo workbench app, `make:aura-table`, release | planned |

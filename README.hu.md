@@ -33,6 +33,8 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [Cella- és sorszabályok](#cella--és-sorszabályok)
   - [Route-ok](#route-ok)
   - [Bootstrap a szerződésben](#bootstrap-a-szerződésben)
+- [Action-oszlopok](#action-oszlopok)
+  - [A kulcs placeholder, nem név](#a-kulcs-placeholder-nem-név)
 - [Csoportos header](#csoportos-header)
 - [Footer és beállítások](#footer-és-beállítások)
 - [A definíció cache-elése](#a-definíció-cache-elése)
@@ -54,23 +56,24 @@ származnak — így nem tudnak elcsúszni egymástól.
 
 ## Állapot
 
-A csomag a tervének **F4** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
-kérést, és a cellái többet renderelnek szövegnél.
+A csomag a tervének **F5a** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
+kérést, a cellái többet renderelnek szövegnél, és a négy resource-akció egyetlen hívás.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| `AuraTable` — táblánként egy osztály, `respond($request)` | Action-oszlopok konvenció-módban: `edit` / `show` / `destroy` (F5) |
-| Oszlopok, csoportok, footer, tábla-beállítások | Soronkénti jogosultság (F5) |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | Saját route és ikon egy akción (F5b) |
+| Oszlopok, csoportok, footer, tábla-beállítások | Soronkénti jogosultság (F5c) |
 | Oszlop-defaultok a modell castjaiból | `make:aura-table` és a demo-app (F6) |
 | A mező-whitelist, az oszlopokból származtatva | |
 | Rendezés, keresés, szűrés, globális keresés | |
 | Relációk mind a négy műveletben | |
 | A kilenc cella-renderelő, feltételekkel és cella-szabályokkal | |
+| Action-oszlopok konvenció-módban — `create` / `show` / `edit` / `destroy` | |
 | Cache-elhető, kérésfüggetlen definíció | |
 
-Action-oszlop ma is építhető — egy `Icon`, `Button` vagy `Modal` route-tal elég hozzá. Az F5 azt
-teszi hozzá, hogy a konvenció megnevezi helyetted a route-okat, és a soronkénti jogosultsági
-gépezetet, ami eldönti, melyik sor kap egyáltalán ilyet.
+Az az action-oszlop, aminek sajátja kell, ma is megépíthető kézzel: egy `Icon`, `Button` vagy
+`Modal` route-tal elég hozzá. Az F5b azt teszi hozzá, hogy az eszkaláció ezt elvégzi helyetted, az
+F5c pedig a soronkénti jogosultsági gépezetet, ami eldönti, melyik sor kap egyáltalán linket.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -255,6 +258,7 @@ Column::make('last_name', 'Vezetéknév')      // explicit fejléc
 Column::selection()                          // a sor-kijelölő checkboxok
 Column::combined('full_name', ['first_name', 'last_name'], 'Név')
 Column::heading('Számla', colspan: 3)        // fejléc több oszlop fölött
+Column::actions('id', Action::edit())        // a resource-linkek — lásd Action-oszlopok
 ```
 
 ### Viselkedés
@@ -654,6 +658,76 @@ oldalán old fel osztályokká, tehát egy ikonnévként átadott nyers CSS-oszt
 
 ---
 
+## Action-oszlopok
+
+Az Aura maga építi meg a resource-linkeket. Egy header-cella, ami `edit_icon` nevű mezőt nevez meg,
+és amihez sehol nincs konfiguráció, arra veszi a böngészőt, hogy generáljon egyet: az ikont a
+gazdaalkalmazás ikon-regiszteréből, az útvonalat pedig abból a resource-bázisból, ami már nála van.
+A konvenció-módban a szerver azt mondja meg, **melyik** akciókat kínálja az oszlop — és itt meg is
+áll.
+
+```php
+use TamasLabs\Aura\Table\{Action, Column};
+
+Column::actions('id', Action::show(), Action::edit(), Action::destroy())
+```
+
+Ebből egyetlen header-cella lesz, és semmi más:
+
+```json
+{ "content": null, "key": "id", "fields": ["show_icon", "edit_icon", "destroy_icon"] }
+```
+
+Se `body.columnConfigs` bejegyzés, se plusz kulcs a sorokban.
+
+| Akció | A böngésző által épített útvonal | Ahogy renderel |
+| --- | --- | --- |
+| `Action::create()` | `{base}/create` | link |
+| `Action::show()` | `{base}/{key}` | link |
+| `Action::edit()` | `{base}/{key}/edit` | link |
+| `Action::destroy()` | `{base}/{key}/destroy` | trigger az Aura beépített megerősítő modaljához |
+
+A `{base}` az `urlParameter`, ami az Aura **kliens**-oldali config-propja. A szerver soha nem látja
+— ezért lehet a konvenció-mód ilyen vékony, és ezért nem tud többet ennél: saját route, más ikon,
+saját modal-id — azokhoz teljes konfiguráció kell, és az az F5b.
+
+A `create` a kakukktojás. Az útvonalában nincs placeholder, az Aura mégis minden sorban rendereli.
+Ez a kliens viselkedése, amit ez a csomag reprodukál és nem javít; egy létrehozás-gomb a toolbarban
+van otthon.
+
+Az oszlop-metódusok magára a cellára továbbra is működnek — fejléc, igazítás, szélesség:
+
+```php
+Column::actions('id', Action::edit(), Action::destroy())
+    ->content('Műveletek')
+    ->align('end')
+    ->width('90px');
+```
+
+### A kulcs placeholder, nem név
+
+A `Column::actions('id', …)` nem rendszeretetből kulcsolja az oszlopot `id`-re. Az Aura ezt a
+kulcsot írja bele a generált útvonalba — `{base}/{id}/edit` —, és soronként az ugyanilyen nevű
+item-mezőből tölti ki. A kulcsnak tehát annak az azonosítónak kell lennie, amit a sorok valóban
+visznek: rendszerint az elsődleges kulcsnak.
+
+Így más oszlop nem foglalhatja el, és az ütközés, amibe szinte minden tábla elsőként belefut, a
+kijelölő oszlop — annak a kulcsa szintén a modell elsődleges kulcsára áll be:
+
+```php
+Column::selection()->key('select'),          // ← ezt kulcsold át
+Column::actions('id', Action::edit()),
+```
+
+A kijelölő oszlop átkulcsolása a kijelölésen nem változtat semmit: az Aura a sor azonosítóját az
+oszlop `field`-jéből olvassa, soha nem a kulcsából (`resolve-row-id.ts`). A kulcs csak a payloadon
+belül azonosítja az oszlopot.
+
+Ugyanez áll egy látható `id` oszlopra is — `Column::make('id')->key('identifier')` —, ami továbbra
+is `id` szerint rendez és keres, mert azok a mező mentén utaznak.
+
+---
+
 ## Csoportos header
 
 ```php
@@ -773,6 +847,12 @@ hozzáér — ahelyett hogy a böngésző rosszat renderelne:
 | Abszolút route, vagy `[\w.]+`-en kívüli placeholder | az Aura minden pontot perjelre cserél, tehát a `route()` URL-je útvonallá válik; a nem illeszkedő placeholder szó szerint bennmarad |
 | Két oszlop, ami ugyanazt a mezőt rendereli | a `columnConfigs` egyetlen, mező szerint kulcsolt map, tehát a második bejegyzés felülírja az elsőt, és a vesztes oszlop a győztes konfigurációját rendereli |
 | `merge()` vagy `set()`, ami `type`, `key`, `if` vagy `else` kulcsot állítana | azok döntik el, hogyan kell a többit olvasni; egy kézzel írt `key` legyőzi a kiadottat, és viszi magával a feltételeket |
+| Action-oszlop olyan kulccsal, amit már egy másik oszlop visz | a kulcs a route-placeholder, amit az Aura soronként tölt ki, tehát nem szabadon változtatható — a másik oszlop az |
+| Ugyanaz az akció két oszlopban, vagy kétszer egyben | az Aura mezőnevenként egy konfigurációt generál, tehát a második előfordulás némán az első útvonalát örökli, az első kulcsával felépítve |
+| Action-mezőnév (`edit_icon`, `destroy_link`, …) `Column::actions()`-ön kívül | az Aura arra a cellára építene útvonalat, bármi is a kulcsa, az oszlop saját értéke pedig soha nem renderelődne |
+| `sortable`, `searchable`, `filterable` vagy `globalSearch` egy action-oszlopon | ezek a flagek a whitelistbe kerülnek, egy ikon mögött viszont nincs adatbázis-oszlop |
+| `Column::actions()` akció nélkül | a `fields` típusa `minItems: 1`, és az Aura csak akkor tekint egy cellát oszlopnak, ha megnevez valamit |
+| `combined()` oszlop üres `fields`-szel | ugyanaz a szabály |
 
 ---
 
@@ -1075,7 +1155,7 @@ külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 | **F2** | Query-oldal — kérés → Eloquent → `items`/`meta`/`links` | ✅ kész |
 | **F3** | Definíciós mag: `AuraTable`, `Column`, következtetés, cache | ✅ kész |
 | **F4** | Cella-builderek: badge, link, button, icon, modal, progress, feltételes konfiguráció | ✅ kész |
-| **F5a** | Akciók konvenció-módban: `Action`, `Column::actions()` | tervezett |
+| **F5a** | Akciók konvenció-módban: `Action`, `Column::actions()` | ✅ kész |
 | **F5b** | Eszkaláció explicit `columnConfig`-ra, és route-építés | tervezett |
 | **F5c** | Soronkénti jogosultság — a válasz-oldal | tervezett |
 | **F6** | Demo workbench-app, `make:aura-table`, kiadás | tervezett |

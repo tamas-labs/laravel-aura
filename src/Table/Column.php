@@ -49,6 +49,9 @@ final class Column
 
     private bool $global = false;
 
+    /** Built by {@see self::actions()}: the fields are routes, not data. */
+    private bool $actions = false;
+
     /** @var string|list<string>|null */
     private string|array|null $cellClass = null;
 
@@ -139,6 +142,46 @@ final class Column
         if ($content !== null) {
             $column->attributes['content'] = $content;
         }
+
+        return $column;
+    }
+
+    /**
+     * The action column: Aura's built-in resource links, one field each.
+     *
+     * ```php
+     * Column::actions('id', Action::show(), Action::edit(), Action::destroy())
+     * ```
+     *
+     * `$key` is not a name this column chose. It is the **route placeholder**:
+     * Aura writes it into the generated route (`{base}/{id}/edit`) and fills it
+     * per row from the item field of the same name, so it has to be the
+     * identifier the rows carry — normally the model's primary key. Two things
+     * follow, and both are checked when the definition is built: no other
+     * column may hold that key, and the field the placeholder names has to
+     * reach the browser in the rows.
+     *
+     * Nothing is emitted into `body.columnConfigs`. The header states which
+     * actions exist and the browser builds the rest, because the resource base
+     * the routes hang off is client-side configuration (`urlParameter`) the
+     * server never sees.
+     *
+     * @throws InvalidDefinition When no action is given.
+     */
+    public static function actions(string $key, Action ...$actions): self
+    {
+        if ($actions === []) {
+            throw InvalidDefinition::noActions($key);
+        }
+
+        $column = new self;
+        $column->actions = true;
+        $column->attributes['content'] = null;
+        $column->attributes['key'] = $key;
+        $column->attributes['fields'] = array_map(
+            static fn (Action $action): string => $action->field(),
+            $actions,
+        );
 
         return $column;
     }
@@ -648,6 +691,19 @@ final class Column
     }
 
     /**
+     * Was this column built by {@see self::actions()}?
+     *
+     * The distinction is not visible in the emitted cell — an action column is
+     * a multi-field cell like any other — but the guards need it: an action
+     * field is only allowed here, and this column's key is a route placeholder
+     * rather than a name that can be changed.
+     */
+    public function isActionColumn(): bool
+    {
+        return $this->actions;
+    }
+
+    /**
      * Is this column searchable? Read by inference, which only offers a range
      * input on a column that has a search input at all.
      */
@@ -687,9 +743,15 @@ final class Column
     }
 
     /**
-     * The four structural rules the header schema states about a cell, checked
-     * here so a broken definition fails on the server rather than rendering
-     * wrongly in the browser.
+     * The structural rules the header schema states about a cell, checked here
+     * so a broken definition fails on the server rather than rendering wrongly
+     * in the browser.
+     *
+     * Four of them are the `headerCell` rules themselves; the fifth is the
+     * `minItems: 1` on `fields`, which is the same class of mistake — a cell
+     * naming no field at all is not a column to Aura (`TableBody.tsx` wants
+     * `fields.length > 0`), and it fails Aura's own response validation, which
+     * takes the whole table down rather than the one column.
      *
      * @param  array<string, mixed>  $cell
      *
@@ -717,6 +779,10 @@ final class Column
 
         if ($hasFields && ! $hasKey) {
             throw InvalidDefinition::missingField($content);
+        }
+
+        if ($hasFields && $cell['fields'] === []) {
+            throw InvalidDefinition::emptyFields($key);
         }
 
         if ($hasField || $hasFields) {

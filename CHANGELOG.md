@@ -6,6 +6,40 @@ szerződés verziója külön él a csomagverziótól.
 
 ## [Unreleased]
 
+### Hozzáadva
+
+- **Action-oszlopok konvenció-módban (F5a).** `Action::create()` / `show()` / `edit()` /
+  `destroy()` és `Column::actions('id', …)`: a négy Laravel-resource akció egyetlen hívásból.
+    - **Csak header-mező keletkezik, `columnConfigs` bejegyzés nem.** A cella
+      `{"content": null, "key": "id", "fields": ["show_icon", …]}`, a sorokba pedig semmi nem
+      kerül. A route-bázis (`urlParameter`) kliensoldali config, amit a szerver nem lát — ezért a
+      konvenció-mód ennyi, és ezért nem tud többet. A saját route és ikon az F5b.
+    - **A kulcs a route-placeholder, nem név.** Az Aura a `{base}/{id}/edit` útvonalat a cella
+      kulcsával építi, és soronként az ugyanilyen nevű item-mezőből tölti ki, tehát a kulcsnak az
+      azonosítónak kell lennie. Másik oszlop nem foglalhatja el; a hibaüzenet a kijelölő oszlopra
+      külön kitér, mert annak a kulcsa alapból szintén az elsődleges kulcs — és mert átkulcsolni
+      biztonságos: az Aura a sor azonosítóját a `field`-ből olvassa (`resolve-row-id.ts`).
+    - **Az action-oszlop az utolsó header-sorba kerül** (INV9), csoportos headerben is; a fölé
+      tett placeholder ugyanazt a kulcsot viszi, tehát a generált útvonal bájtra ugyanaz.
+
+### Javítva
+
+- **Négy új build-idejű őr az action-konvenció köré.** Mind a négy némán rossz renderelést
+  előzött volna meg:
+    - **Ugyanaz az akció kétszer** (két oszlopban vagy egyben) `InvalidDefinition`. A
+      `columnConfigs` mezőnév szerint kulcsolt, tehát a második előfordulás az *első* útvonalát
+      örökölte volna, az első oszlop kulcsával felépítve.
+    - **Action-mezőnév `Column::actions()`-ön kívül** (`Column::make('edit_icon')`,
+      `Column::combined('x', ['name', 'destroy_link'])`) `InvalidDefinition`. Az Aura arra a
+      cellára is útvonalat épített volna, bármi is a kulcsa, az oszlop értéke pedig sosem
+      renderelődik. Mind a 12 kombinációt felismeri (négy prefix × `_icon` / `_link` / `_button`);
+      a `status_icon`-féle általános prefix érintetlen marad, mert az nem akció.
+    - **Rendezhető / kereshető / szűrhető action-oszlop** `InvalidDefinition`. Eddig a
+      `multiFieldNeedsReference` üzenetét kapta, ami `->reference('…')`-t javasolt egy ikonoszlopra.
+    - **Üres `fields` lista** `InvalidDefinition` (`Column::actions('id')` akció nélkül,
+      `Column::combined('x', [])`). A séma `minItems: 1`-et ír elő, és az Aura csak akkor tekint
+      egy cellát oszlopnak, ha megnevez valamit.
+
 ### Biztonság
 
 - **A kérés minden listája és minden sztringje korlátozva van.** Eddig csak a `paginate` volt az;

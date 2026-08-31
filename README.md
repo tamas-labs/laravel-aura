@@ -34,9 +34,10 @@ and it answers the request.
 
 ## Status
 
-The definition core (**F3**) and the cell builders (**F4**) are complete: a table is a class,
-serves a request end to end, and renders badges, links, progress bars and the rest, conditionally
-per row. The action layer's convention mode and per-row permissions come in **F5**. See
+The definition core (**F3**), the cell builders (**F4**) and the action convention (**F5a**) are
+complete: a table is a class, serves a request end to end, renders badges, links, progress bars and
+the rest conditionally per row, and offers the four resource actions in one call. Routes of your
+own on an action come in **F5b**, per-row permissions in **F5c**. See
 [Status](./README.en.md#status) for the full picture.
 
 Not released: no tag, not on Packagist.

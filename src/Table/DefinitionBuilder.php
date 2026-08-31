@@ -80,6 +80,7 @@ final readonly class DefinitionBuilder
         }
 
         self::assertKeysAreUnique($columns);
+        self::assertActionsAreWellFormed($columns);
 
         $cells = CellConfigs::from($columns);
         $permissions = ColumnPermissions::from($columns);
@@ -264,6 +265,7 @@ final readonly class DefinitionBuilder
      */
     private static function assertKeysAreUnique(array $columns): void
     {
+        /** @var array<string, ResolvedColumn> $seen */
         $seen = [];
 
         foreach ($columns as $resolved) {
@@ -273,11 +275,89 @@ final readonly class DefinitionBuilder
                 continue;
             }
 
-            if (isset($seen[$key])) {
-                throw InvalidDefinition::duplicateKey($key);
+            $previous = $seen[$key] ?? null;
+
+            if ($previous instanceof ResolvedColumn) {
+                // An action column's key is the route placeholder rather than a
+                // name it picked, so "give one of them an explicit key()" is
+                // advice that only holds for one of the two. Say which.
+                $action = $resolved->isActionColumn() ? $resolved : $previous;
+                $other = $resolved->isActionColumn() ? $previous : $resolved;
+
+                throw $action->isActionColumn()
+                    ? InvalidDefinition::actionKeyTaken($key, $other->flag('selectable'))
+                    : InvalidDefinition::duplicateKey($key);
             }
 
-            $seen[$key] = true;
+            $seen[$key] = $resolved;
+        }
+    }
+
+    /**
+     * Aura's four resource actions, and where they are allowed to appear.
+     *
+     * The browser generates a configuration for a field named `edit_icon` and
+     * friends, keying it — like every other entry in `columnConfigs` — by the
+     * field name alone. Two consequences, and neither is visible in the
+     * payload:
+     *
+     * - The route is built from *whichever* cell the generator reaches first,
+     *   so a second column offering the same action inherits the first one's
+     *   placeholder instead of its own.
+     * - A data column that merely happens to name such a field gets a route
+     *   built onto it, and its value never renders.
+     *
+     * Both are silent in the browser, so they are refused here. And an action
+     * column cannot be sorted, searched or filtered: those flags reach the
+     * whitelist, and there is no column behind an icon to operate on.
+     *
+     * @param  list<ResolvedColumn>  $columns
+     *
+     * @throws InvalidDefinition
+     */
+    private static function assertActionsAreWellFormed(array $columns): void
+    {
+        /** @var array<string, string> $seen */
+        $seen = [];
+
+        foreach ($columns as $resolved) {
+            $key = $resolved->key() ?? '';
+
+            if ($resolved->isActionColumn()) {
+                self::assertNotOperable($resolved, $key);
+            }
+
+            foreach ($resolved->declaredFields() as $field) {
+                if (! Action::isActionField($field)) {
+                    continue;
+                }
+
+                if (! $resolved->isActionColumn()) {
+                    throw InvalidDefinition::actionFieldOutsideActionColumn($key, $field);
+                }
+
+                if (isset($seen[$field])) {
+                    throw InvalidDefinition::duplicateAction($field, $seen[$field], $key);
+                }
+
+                $seen[$field] = $key;
+            }
+        }
+    }
+
+    /**
+     * @throws InvalidDefinition
+     */
+    private static function assertNotOperable(ResolvedColumn $resolved, string $key): void
+    {
+        foreach (['sortable', 'searchable', 'filterable'] as $operation) {
+            if ($resolved->flag($operation)) {
+                throw InvalidDefinition::actionColumnOperable($key, $operation);
+            }
+        }
+
+        if ($resolved->column->wantsGlobalSearch()) {
+            throw InvalidDefinition::actionColumnOperable($key, 'globalSearch');
         }
     }
 }
