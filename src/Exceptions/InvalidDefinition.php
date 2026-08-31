@@ -412,6 +412,92 @@ final class InvalidDefinition extends LogicException implements AuraException
     }
 
     /**
+     * An escalated action builds its own route, and the resource convention is
+     * where the server-side half of it comes from.
+     */
+    public static function actionNeedsResource(string $field): self
+    {
+        return new self(sprintf(
+            'The action "%s" is customised, so it has to emit its own configuration — and that '
+            .'configuration needs a route the server can build. Set $resource on the table '
+            .'(protected ?string $resource = \'admin/users\';), or give this action a route of its '
+            .'own with ->route(\'…\') or ->routeName(\'…\'). In convention mode no route is needed: '
+            .'the browser builds it from its own urlParameter.',
+            $field,
+        ));
+    }
+
+    /**
+     * Aura turns every dot into a slash, so a route name passed where a path
+     * belongs resolves to a real URL with the identifier missing.
+     */
+    public static function dottedActionRoute(string $route, ?string $name = null): self
+    {
+        $source = $name === null
+            ? 'Pass a path such as "users/{id}/edit"'
+            : sprintf('The route "%s" is registered with that path; give it one without a dot', $name);
+
+        return new self(sprintf(
+            'The action route "%s" contains a dot, and Aura turns every dot into a slash — so this '
+            .'would resolve to a real URL that is not the one you meant, without an error anywhere. '
+            .'%s, or name a route with ->routeName(\'…\').',
+            $route,
+            $source,
+        ));
+    }
+
+    /**
+     * The resource base is prefixed onto every generated action route.
+     */
+    public static function invalidResource(string $resource, string $fault): self
+    {
+        $why = $fault === 'absolute'
+            ? 'Aura only builds relative paths and prefixes the host app\'s siteName itself'
+            : 'Aura turns every dot into a slash, so the base would silently split into extra segments';
+
+        return new self(sprintf(
+            'The table\'s $resource "%s" cannot be used as a route base: %s. Give it a plain '
+            .'relative path such as "admin/users".',
+            $resource,
+            $why,
+        ));
+    }
+
+    /**
+     * A route name that resolves to nothing would leave the action pointing at
+     * an empty path.
+     */
+    public static function unknownRoute(string $name): self
+    {
+        return new self(sprintf(
+            'No route is named "%s". Check the name against `php artisan route:list`, and remember '
+            .'that a table definition may be built before the routes it points at are registered — '
+            .'in that case name the path directly with ->route(\'…\').',
+            $name,
+        ));
+    }
+
+    /**
+     * Exactly one parameter may be left for Aura to fill from the row: the one
+     * the action column keys on.
+     *
+     * @param  list<string>  $open
+     */
+    public static function ambiguousRoute(string $name, array $open): self
+    {
+        return new self(sprintf(
+            'The route "%s" leaves %d parameters open (%s), and only one can be filled from the row '
+            .'— the one the action column keys on. Pass the others to routeName(): '
+            .'->routeName(\'%s\', [\'%s\' => $value]).',
+            $name,
+            count($open),
+            '{'.implode('}, {', $open).'}',
+            $name,
+            $open[0] ?? 'parameter',
+        ));
+    }
+
+    /**
      * A column has to name its source, unless it is a grouping cell.
      */
     public static function missingField(?string $content): self

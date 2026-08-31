@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
 use TamasLabs\Aura\Cell\Badge;
+use TamasLabs\Aura\Cell\Button;
+use TamasLabs\Aura\Cell\CellConfig;
 use TamasLabs\Aura\Cell\CellRules;
 use TamasLabs\Aura\Cell\Condition;
 use TamasLabs\Aura\Cell\Icon;
+use TamasLabs\Aura\Cell\Link;
 use TamasLabs\Aura\Cell\Modal;
 use TamasLabs\Aura\Cell\Progress;
 use TamasLabs\Aura\Cell\Reference;
@@ -292,4 +295,30 @@ it('still accepts cell rules on a multi-field column that name their field', fun
     ]));
 
     expect(auraDigArray(auraDigArray($configs, 'name'), 'cellRules')['key'])->toBe('status');
+});
+
+it('does not default a field onto a configuration that carries a fixed value', function (string $type, CellConfig $config): void {
+    // Every renderer that reads a row value reads `field` first and falls back
+    // to `value` — `renderBadgeNode`, `renderProgressNode` and
+    // `action-node-helpers.ts` all do. So a defaulted field beside a fixed
+    // label is not a fallback: the field wins and the label never appears.
+    $configs = auraConfigs(auraTable([Column::make('email')->as($config)]));
+
+    $resolved = auraDigArray($configs, 'email');
+
+    expect($resolved['type'])->toBe($type)
+        ->and($resolved)->not->toHaveKey('field');
+})->with([
+    'link' => ['link', fn (): CellConfig => Link::make()->value('Details')->route('users/{id}')],
+    'button' => ['button', fn (): CellConfig => Button::make('Open')->route('users/{id}')],
+    'badge' => ['badge', fn (): CellConfig => Badge::make()->value('n/a')],
+]);
+
+it('still defaults the field onto a reference, whose renderer reads value first', function (): void {
+    // `renderReferenceNode` checks `value` before `field`, so the column's
+    // field beside it is inert rather than harmful — and dropping it would
+    // change the payload for a rule that changes nothing.
+    $configs = auraConfigs(auraTable([Column::make('email')->as(Reference::make()->value('n/a'))]));
+
+    expect(auraDigArray($configs, 'email')['field'])->toBe('email');
 });

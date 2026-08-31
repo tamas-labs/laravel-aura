@@ -70,6 +70,19 @@ abstract class AuraTable
     protected int $cacheTtl = 3600;
 
     /**
+     * The resource this table's actions hang off — `admin/users`.
+     *
+     * Only a **customised** action needs it. In convention mode the browser
+     * builds the route from its own `urlParameter`, and the server never sees
+     * that; the moment an action is customised the server has to emit the whole
+     * configuration, route included, and this is where the base comes from.
+     *
+     * A relative path with no dots: Aura prefixes the host app's `siteName`
+     * itself, and turns every dot into a slash.
+     */
+    protected ?string $resource = null;
+
+    /**
      * The query the table pages through. Constraints that are always true —
      * scoping to a tenant, eager loads — belong here.
      *
@@ -175,6 +188,15 @@ abstract class AuraTable
     }
 
     /**
+     * The route base an escalated action builds on. Override when it is not a
+     * constant — one resource per tenant, say.
+     */
+    public function resource(): ?string
+    {
+        return $this->resource;
+    }
+
+    /**
      * Cache key for the definition. Override when one table class serves
      * several shapes — per locale, say.
      */
@@ -215,6 +237,7 @@ abstract class AuraTable
             settings: $this->settings(),
             footer: $this->footer(),
             rowRules: $this->rowRules(),
+            resource: $this->resource(),
         );
 
         return $builder->build();

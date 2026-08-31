@@ -96,6 +96,16 @@ final readonly class ResolvedColumn
     }
 
     /**
+     * The actions this column offers, in order.
+     *
+     * @return list<Action>
+     */
+    public function actions(): array
+    {
+        return $this->column->actionList();
+    }
+
+    /**
      * Is this header-cell flag set?
      */
     public function flag(string $key): bool

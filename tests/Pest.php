@@ -92,8 +92,9 @@ function auraTable(
     ?Footer $footer = null,
     ?TableSettings $settings = null,
     ?CellRules $rowRules = null,
+    ?string $resource = null,
 ): AuraTable {
-    return new InlineTable($columns, $footer, $settings, $rowRules);
+    return new InlineTable($columns, $footer, $settings, $rowRules, $resource);
 }
 
 /**

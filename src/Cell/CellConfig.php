@@ -95,11 +95,18 @@ abstract class CellConfig extends ConditionalBuilder
      * of its segments. An explicit `field` is never affected; this only decides
      * whether the column's is filled in.
      *
+     * `value` is here because every renderer that reads a row value reads
+     * `field` **first** and falls back to `value` — `renderBadgeNode`,
+     * `renderProgressNode` and `action-node-helpers.ts` all do. So a fixed
+     * label beside a defaulted field is not a fallback at all: the field wins,
+     * and the label the caller wrote never appears. {@see Reference} is the one
+     * exception and says so.
+     *
      * @return list<string>
      */
     protected function supersedesField(): array
     {
-        return ['fields'];
+        return ['fields', 'value'];
     }
 
     /**
@@ -305,12 +312,19 @@ abstract class CellConfig extends ConditionalBuilder
     }
 
     /**
-     * Has the caller already said where the value comes from?
+     * Has anything already said where the value comes from?
+     *
+     * Read off the settings rather than the explicit attributes, because what
+     * matters is whether the key will be *emitted*: a `value` a preset or an
+     * action filled in as a default is still the thing the renderer would have
+     * to fall back to, and a defaulted `field` beside it would win instead.
      */
     private function fieldIsSuperseded(): bool
     {
+        $settings = $this->settings();
+
         foreach ($this->supersedesField() as $key) {
-            if (array_key_exists($key, $this->attributes)) {
+            if (array_key_exists($key, $settings)) {
                 return true;
             }
         }

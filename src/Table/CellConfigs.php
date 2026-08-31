@@ -20,9 +20,10 @@ use TamasLabs\Aura\Exceptions\InvalidDefinition;
  * `cellRules`. Keying by the documented key would produce a payload that
  * validates and renders nothing.
  *
- * Three things can put an entry in the map, and they are applied in this order
- * per column — a column's own renderer, its per-field renderers, then its cell
- * rules — because the rules attach to whatever the first two left behind.
+ * Four things can put an entry in the map, and they are applied in this order
+ * per column — a column's own renderer, its per-field renderers, its escalated
+ * actions, then its cell rules — because the rules attach to whatever the
+ * others left behind.
  *
  * @internal
  */
@@ -38,10 +39,11 @@ final class CellConfigs
 
     /**
      * @param  list<ResolvedColumn>  $columns
+     * @param  string|null  $resource  The table's route base, for escalated actions.
      *
      * @throws InvalidDefinition
      */
-    public static function from(array $columns): self
+    public static function from(array $columns, ?string $resource = null): self
     {
         $cells = new self;
 
@@ -50,6 +52,7 @@ final class CellConfigs
             // decided together, and the rules read what the renderers wrote.
             $cells->addRenderer($resolved);
             $cells->addFieldRenderers($resolved);
+            $cells->addActions($resolved, $resource);
             $cells->addRules($resolved);
         }
 
@@ -128,6 +131,34 @@ final class CellConfigs
 
             $this->configs[$member] = $config->resolve($member, $resolved->cell);
             $this->numeric = [...$this->numeric, ...$config->numericFields($member)];
+        }
+    }
+
+    /**
+     * The configurations of any customised action, one entry per action field.
+     *
+     * An action that was left alone contributes nothing: Aura generates its
+     * configuration in the browser, from the resource base only the browser
+     * knows. An action that was customised cannot be left to that — the
+     * generated configuration would not carry the customisation — so it emits
+     * the whole entry here, and the preprocessor skips the field on finding one.
+     *
+     * @throws InvalidDefinition
+     */
+    private function addActions(ResolvedColumn $resolved, ?string $resource): void
+    {
+        $key = $resolved->key() ?? '';
+
+        foreach ($resolved->actions() as $action) {
+            if (! $action->isEscalated()) {
+                continue;
+            }
+
+            $field = $action->field();
+
+            $this->claim($field, $key);
+
+            $this->configs[$field] = $action->resolve($key, $resource, $resolved->cell);
         }
     }
 

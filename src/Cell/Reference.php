@@ -84,6 +84,18 @@ final class Reference extends CellConfig
         return true;
     }
 
+    /**
+     * The one renderer that reads `value` **before** `field`
+     * (`renderReferenceNode.ts`), so a fixed value here really is a fixed
+     * value, and the column's field beside it is inert rather than harmful.
+     * Kept out of {@see CellConfig::supersedesField()}'s list so the emitted
+     * configuration does not change shape for a rule that changes nothing.
+     */
+    protected function supersedesField(): array
+    {
+        return ['fields'];
+    }
+
     protected function formats(): bool
     {
         return true;

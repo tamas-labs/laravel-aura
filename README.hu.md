@@ -35,6 +35,8 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [Bootstrap a szerződésben](#bootstrap-a-szerződésben)
 - [Action-oszlopok](#action-oszlopok)
   - [A kulcs placeholder, nem név](#a-kulcs-placeholder-nem-név)
+  - [Eszkaláció](#eszkaláció)
+  - [Route-ok](#action-route-ok)
 - [Csoportos header](#csoportos-header)
 - [Footer és beállítások](#footer-és-beállítások)
 - [A definíció cache-elése](#a-definíció-cache-elése)
@@ -56,24 +58,25 @@ származnak — így nem tudnak elcsúszni egymástól.
 
 ## Állapot
 
-A csomag a tervének **F5a** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
-kérést, a cellái többet renderelnek szövegnél, és a négy resource-akció egyetlen hívás.
+A csomag a tervének **F5b** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
+kérést, a cellái többet renderelnek szövegnél, és a négy resource-akció egyetlen hívás —
+testreszabva is.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| `AuraTable` — táblánként egy osztály, `respond($request)` | Saját route és ikon egy akción (F5b) |
-| Oszlopok, csoportok, footer, tábla-beállítások | Soronkénti jogosultság (F5c) |
-| Oszlop-defaultok a modell castjaiból | `make:aura-table` és a demo-app (F6) |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | Soronkénti jogosultság (F5c) |
+| Oszlopok, csoportok, footer, tábla-beállítások | `make:aura-table` és a demo-app (F6) |
+| Oszlop-defaultok a modell castjaiból | |
 | A mező-whitelist, az oszlopokból származtatva | |
 | Rendezés, keresés, szűrés, globális keresés | |
 | Relációk mind a négy műveletben | |
 | A kilenc cella-renderelő, feltételekkel és cella-szabályokkal | |
-| Action-oszlopok konvenció-módban — `create` / `show` / `edit` / `destroy` | |
+| Action-oszlopok — konvenció-mód és eszkaláció teljes konfigurációra | |
+| Route a `$resource`-ból, nevesített route-ból vagy kiírva | |
 | Cache-elhető, kérésfüggetlen definíció | |
 
-Az az action-oszlop, aminek sajátja kell, ma is megépíthető kézzel: egy `Icon`, `Button` vagy
-`Modal` route-tal elég hozzá. Az F5b azt teszi hozzá, hogy az eszkaláció ezt elvégzi helyetted, az
-F5c pedig a soronkénti jogosultsági gépezetet, ami eldönti, melyik sor kap egyáltalán linket.
+Ami még hiányzik, az a soronkénti fele: annak eldöntése, melyik sor kap egyáltalán linket — ez az
+F5c.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -728,6 +731,89 @@ is `id` szerint rendez és keres, mert azok a mező mentén utaznak.
 
 ---
 
+### Eszkaláció
+
+A konvenció-mód a böngésző saját alapértelmezéseinél megáll. Amint bármit testreszabsz — route,
+ikon, szín, felirat, tooltip, modal-id —, a mezőt már nem lehet a böngészőre hagyni, mert a generált
+konfiguráció nem vinné magával a testreszabást. Az akció ezért **eszkalál**: maga adja ki a teljes
+`body.columnConfigs` bejegyzést, a preprocesszor pedig kihagyja azt a mezőt, amihez már van
+konfiguráció.
+
+A hívási felület nem változik, csak a payload.
+
+```php
+Column::actions('id',
+    Action::show(),                                    // konvenció: nincs config
+    Action::edit()->title('Felhasználó szerkesztése'), // eszkalált
+    Action::destroy()->asButton()->variant('danger'),  // eszkalált
+)
+```
+
+Az eszkaláció akciónként történik, nem oszloponként: a fenti `show` továbbra sem kerül semmibe.
+
+Az `asIcon()` / `asLink()` / `asButton()` az alakot választja — az `_icon`, `_link` vagy `_button`
+utótagot —, és **nem** testreszabás, mert az Aura mindhármat generálja. A `set()` a trigger
+konfigurációjának bármelyik további kulcsát eléri (`size`, `target`, `rounded`, `data-*` attribútum),
+és a többihez hasonlóan eszkalál.
+
+Az eszkalált akciónak olyan route kell, amit a **szerver** tud felépíteni — erre való a `$resource`:
+
+```php
+final class UserTable extends AuraTable
+{
+    protected ?string $resource = 'admin/users';
+    // …
+}
+```
+
+Enélkül — és az akció saját route-ja nélkül — a build elszáll, és megmondja, mit kell beállítani.
+Konvenció-módban a `$resource` soha nem kell: a böngésző a saját `urlParameter`-éből építi az
+útvonalat.
+
+Két dolgot az eszkaláció nem tud bájtra reprodukálni, mindkettőt azért, mert a regiszterek a
+böngészőben élnek:
+
+| | Amit az Aura generál | Amit a szerver eszkalál |
+| --- | --- | --- |
+| ikon glyph | `class: ['fas','fa-pen','text-primary']`, az `icons` / `variants` regiszterből | `icon` és `variant`, amit a `normalizeIconConfigs` ugyanabban a menetben, ugyanazokból a regiszterekből old fel |
+| gomb színe | `variants[prefix]`, `variants.primary`-re, majd `primary`-ra visszaesve | `primary`, hacsak a `->variant()` mást nem mond |
+| `destroy` modal | visz egy dekoratív `key`-t | elhagyja — a `resolveRoute` az útvonalat és a sort olvassa, a kulcsot soha |
+
+Az első és a harmadik a payloadon változtat, máson nem. A második az egyetlen hely, ahol az
+eszkaláció azon is változtat, amit a felhasználó lát — és csak akkor, ha a gazdaalkalmazás
+regisztrált variánst az akció saját neve alatt.
+
+<a id="action-route-ok"></a>
+### Route-ok
+
+Három módon mondhatod meg, hová megy egy akció, preferencia szerint:
+
+```php
+Action::edit()                                        // a konvenció — a böngésző építi
+Action::edit()->routeName('admin.users.edit')         // a már regisztrált route
+Action::edit()->route('admin/users/{id}/edit')        // kiírt útvonal
+```
+
+A `routeName()` a route URI-ját **úgy olvassa, ahogy regisztrálva lett** —
+`admin/users/{user}/edit` —, soha nem a `route()` helperen keresztül, aminek az abszolút URL-jéből
+az Aura `/https://app/example/com/admin/users/5/edit`-et csinálna. A megnevezett paramétereket
+behelyettesíti; ami nyitva marad, abból lesz a placeholder, amit az Aura a sorból tölt ki, az
+action-oszlop kulcsa alatt:
+
+```php
+Action::show()->routeName('companies.users.show', ['company' => $company->id]);
+// companies/7/users/{id}
+```
+
+Az az érték, ami maga is `{placeholder}`, érintetlenül megy át — így egy második sormező tölthet ki
+egy második paramétert. Egynél több nyitva hagyott paraméter elutasítva: csak egy jöhet a sorból.
+
+**Az action-route-ban a pont tilos**, szemben a csomag többi részével. Az Aura minden pontot perjelre
+cserél, tehát egy útvonal helyére írt Laravel route-**név** (`users.edit`) `/users/edit`-re oldódik
+fel: valódi URL, hiányzó azonosítóval, és sehol egy hiba. A route-nevekhez a `routeName()` való.
+
+---
+
 ## Csoportos header
 
 ```php
@@ -853,6 +939,10 @@ hozzáér — ahelyett hogy a böngésző rosszat renderelne:
 | `sortable`, `searchable`, `filterable` vagy `globalSearch` egy action-oszlopon | ezek a flagek a whitelistbe kerülnek, egy ikon mögött viszont nincs adatbázis-oszlop |
 | `Column::actions()` akció nélkül | a `fields` típusa `minItems: 1`, és az Aura csak akkor tekint egy cellát oszlopnak, ha megnevez valamit |
 | `combined()` oszlop üres `fields`-szel | ugyanaz a szabály |
+| Testreszabott akció `$resource` és saját route nélkül | az eszkalált akció maga adja ki az útvonalat, a szervernek pedig nincs miből felépítenie |
+| Abszolút vagy pontot tartalmazó `$resource` vagy action-route | az Aura maga teszi elé a `siteName`-et, és minden pontot perjelre cserél — az útvonal helyére írt route-név valódi URL-re oldódik fel, hiányzó azonosítóval |
+| `routeName()` nem regisztrált route-ra | az akció üres útvonalra mutatna |
+| `routeName()`, ami egynél több paramétert hagy nyitva | csak egy tölthető ki a sorból: amire az action-oszlop kulcsol |
 
 ---
 
@@ -1156,7 +1246,7 @@ külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 | **F3** | Definíciós mag: `AuraTable`, `Column`, következtetés, cache | ✅ kész |
 | **F4** | Cella-builderek: badge, link, button, icon, modal, progress, feltételes konfiguráció | ✅ kész |
 | **F5a** | Akciók konvenció-módban: `Action`, `Column::actions()` | ✅ kész |
-| **F5b** | Eszkaláció explicit `columnConfig`-ra, és route-építés | tervezett |
+| **F5b** | Eszkaláció explicit `columnConfig`-ra, és route-építés | ✅ kész |
 | **F5c** | Soronkénti jogosultság — a válasz-oldal | tervezett |
 | **F6** | Demo workbench-app, `make:aura-table`, kiadás | tervezett |
 

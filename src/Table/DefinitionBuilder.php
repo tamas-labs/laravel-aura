@@ -27,6 +27,7 @@ final readonly class DefinitionBuilder
     /**
      * @param  list<Column|ColumnGroup>  $entries  The columns, left to right.
      * @param  Model  $model  The model column inference reads.
+     * @param  string|null  $resource  The route base an escalated action builds on.
      */
     public function __construct(
         private array $entries,
@@ -34,6 +35,7 @@ final readonly class DefinitionBuilder
         private TableSettings $settings,
         private ?Footer $footer = null,
         private ?CellRules $rowRules = null,
+        private ?string $resource = null,
     ) {}
 
     /**
@@ -41,6 +43,10 @@ final readonly class DefinitionBuilder
      */
     public function build(): TableBlueprint
     {
+        if ($this->resource !== null) {
+            Action::assertUsableResource($this->resource);
+        }
+
         $grouped = $this->isGrouped();
 
         /** @var list<array<string, mixed>> $top */
@@ -82,7 +88,7 @@ final readonly class DefinitionBuilder
         self::assertKeysAreUnique($columns);
         self::assertActionsAreWellFormed($columns);
 
-        $cells = CellConfigs::from($columns);
+        $cells = CellConfigs::from($columns, $this->resource);
         $permissions = ColumnPermissions::from($columns);
 
         return new TableBlueprint(

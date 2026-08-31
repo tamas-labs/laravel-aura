@@ -28,7 +28,10 @@ final class InlineTable extends AuraTable
         private readonly ?Footer $footerBlock = null,
         private readonly ?TableSettings $tableSettings = null,
         private readonly ?CellRules $rules = null,
-    ) {}
+        ?string $resource = null,
+    ) {
+        $this->resource = $resource;
+    }
 
     /**
      * @return Builder<TypedUser>

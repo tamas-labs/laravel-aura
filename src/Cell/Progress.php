@@ -214,7 +214,7 @@ final class Progress extends CellConfig
      */
     protected function supersedesField(): array
     {
-        return ['fields', 'stacked'];
+        return [...parent::supersedesField(), 'stacked'];
     }
 
     protected function requires(): array

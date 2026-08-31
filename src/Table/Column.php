@@ -49,8 +49,12 @@ final class Column
 
     private bool $global = false;
 
-    /** Built by {@see self::actions()}: the fields are routes, not data. */
-    private bool $actions = false;
+    /**
+     * Built by {@see self::actions()}: the fields are routes, not data.
+     *
+     * @var list<Action>|null
+     */
+    private ?array $actions = null;
 
     /** @var string|list<string>|null */
     private string|array|null $cellClass = null;
@@ -175,7 +179,7 @@ final class Column
         }
 
         $column = new self;
-        $column->actions = true;
+        $column->actions = array_values($actions);
         $column->attributes['content'] = null;
         $column->attributes['key'] = $key;
         $column->attributes['fields'] = array_map(
@@ -700,7 +704,17 @@ final class Column
      */
     public function isActionColumn(): bool
     {
-        return $this->actions;
+        return $this->actions !== null;
+    }
+
+    /**
+     * The actions this column offers, in order. Empty for any other column.
+     *
+     * @return list<Action>
+     */
+    public function actionList(): array
+    {
+        return $this->actions ?? [];
     }
 
     /**

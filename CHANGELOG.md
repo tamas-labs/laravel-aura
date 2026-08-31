@@ -8,6 +8,32 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **Akció-eszkaláció és route-építés (F5b).** Bármilyen testreszabás — route, ikon, szín, felirat,
+  tooltip, modal-id — hatására az akció maga adja ki a teljes `columnConfigs` bejegyzést, mert a
+  generált konfiguráció nem vinné magával a testreszabást. A hívási felület nem változik, csak a
+  payload; az eszkaláció **akciónként** történik, nem oszloponként.
+    - `Action::asIcon()` / `asLink()` / `asButton()` az alakot választja (`_icon` / `_link` /
+      `_button`), és **nem** eszkalál: az Aura mindhármat generálja. Mind a 12 kombinációt
+      táblavezérelt teszt rögzíti, az Aura preprocesszorának kimenete szerint.
+    - `Action::route()`, `routeName()`, `icon()`, `variant()`, `label()`, `title()`, `alt()`,
+      `modal()` és a `set()` escape hatch — ezek eszkalálnak.
+    - **`AuraTable::$resource`** az eszkalált route bázisa. Konvenció-módban soha nem kell: az
+      útvonalat a böngésző építi a saját `urlParameter`-éből, amit a szerver nem lát. Hiánya
+      beszédesen dob; a `$resource` maga akkor is ellenőrzött, ha éppen semmi nem eszkalál, mert a
+      definíció cache-elhető, és a hiba különben véletlenszerű kérésnél derülne ki.
+    - **`routeName()` a route URI-ját olvassa, ahogy regisztrálva lett** (`admin/users/{user}/edit`),
+      nem a `route()` helperen keresztül — annak abszolút URL-jéből az Aura
+      `/https://app/example/com/...`-ot csinálna. A megnevezett paramétereket behelyettesíti, a
+      nyitva maradó egy lesz a sorból töltött placeholder, az action-oszlop kulcsa alatt. Egynél
+      több nyitott paraméter 422 helyett build-idejű hiba.
+    - **Az action-route-ban a pont tilos** (a csomag többi részével szemben). Az Aura minden pontot
+      perjelre cserél, tehát az útvonal helyére írt route-név (`users.edit`) `/users/edit`-re oldódik
+      fel: valódi URL, hiányzó azonosítóval, sehol egy hiba.
+    - Amit az eszkaláció nem tud reprodukálni, mert a regiszterek a böngészőben élnek: az ikon
+      feloldott `class`-a (helyette `icon` + `variant`, amit a `normalizeIconConfigs` ugyanabban a
+      menetben ugyanúgy old fel) és a gomb `variants[prefix]` színe (helyette `primary`). A `destroy`
+      modal dekoratív `key`-jét szándékosan elhagyjuk — a `resolveRoute` sosem olvassa.
+
 - **Action-oszlopok konvenció-módban (F5a).** `Action::create()` / `show()` / `edit()` /
   `destroy()` és `Column::actions('id', …)`: a négy Laravel-resource akció egyetlen hívásból.
     - **Csak header-mező keletkezik, `columnConfigs` bejegyzés nem.** A cella
@@ -24,6 +50,14 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Javítva
 
+- **A fix `value` nem veszett el többé egy defaultolt `field` mögött.** A `Link::make()->value('X')`,
+  a `Button::make('X')` és a `Badge::make()->value('X')` mind megkapta az oszlop mezőjét
+  `field`-ként — és mindhárom renderelő **előbb** olvassa a `field`-et, csak utána esik vissza a
+  `value`-ra (`action-node-helpers.ts`, `renderBadgeNode`, `renderProgressNode`). A megadott
+  felirat így soha nem jelent meg, némán. A `CellConfig::supersedesField()` mostantól a `value`-t is
+  felsorolja, és a vizsgálat a **settings**-et nézi, nem csak az explicit attribútumokat. A
+  `Reference` a kivétel, és ki is mondja: az ő renderelője a `value`-t olvassa előbb, ott a mező
+  ártalmatlan.
 - **Négy új build-idejű őr az action-konvenció köré.** Mind a négy némán rossz renderelést
   előzött volna meg:
     - **Ugyanaz az akció kétszer** (két oszlopban vagy egyben) `InvalidDefinition`. A
