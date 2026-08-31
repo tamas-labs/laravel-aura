@@ -30,6 +30,23 @@ final class UnsupportedRelation extends RuntimeException implements AuraExceptio
     }
 
     /**
+     * The dotted path names something the model does not offer as a relation —
+     * a misspelling, an accessor, or a method that exists but returns anything
+     * else. Reported separately because "only one level is supported" would be
+     * an answer to a question nobody asked.
+     */
+    public static function notARelation(string $field, string $path): self
+    {
+        return new self(sprintf(
+            'Cannot sort by "%s": "%s" is not a relation on this model. Sorting through a dotted '
+            .'field needs a relation method returning a BelongsTo or a HasOne; check the spelling, '
+            .'or name the underlying column with ->reference(\'…\').',
+            $field,
+            $path,
+        ));
+    }
+
+    /**
      * Nested relation paths would need one correlated subquery per level.
      */
     public static function forNestedSort(string $field): self

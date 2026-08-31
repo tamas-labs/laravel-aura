@@ -240,3 +240,14 @@ it('paginates with the page and size the request asked for', function (): void {
         ->and($paginator->perPage())->toBe(2)
         ->and($paginator->total())->toBe(5);
 });
+
+it('refuses to sort through a method that is not a relation', function (): void {
+    // `delete` exists on every model. Before the guard, resolving this field
+    // *called* it on the way to discovering it is not a relation — and then
+    // reported "only a single relation level is supported", which is an answer
+    // to a question nobody asked.
+    AuraQuery::apply(User::query(), AuraRequest::fromArray(
+        ['page' => 1, 'paginate' => 10, 'sortable' => [['field' => 'delete.title', 'direction' => 'asc']]],
+        new FieldPermissions(sortable: ['delete.title']),
+    ))->toSql();
+})->throws(UnsupportedRelation::class, 'is not a relation on this model');

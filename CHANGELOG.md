@@ -24,6 +24,19 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Javítva
 
+- **A pontozott mező metódusa hívás előtt vizsgálatra kerül** (`Support\Relations`, `@internal`).
+  A `method_exists()` volt az egyetlen őr két helyen (`Inference::resolve()`,
+  `AuraQuery::toOneSubquery()`), így a `Column::make('delete.x')` a header felépítése közben
+  **meghívta a modell `delete()`-jét**, és csak utána derült ki, hogy nem reláció jött vissza.
+    - A Laravel `Model::isRelation()`-je erre nem jó: az `method_exists() || relationResolver()`,
+      a visszatérési típusról semmit nem mond. A `delete()`, `save()`, `push()`, `refresh()` és
+      további mintegy száz `Model`-metódus **típusjelölés nélküli**, tehát a visszatérési típus
+      vizsgálata sem fogná meg őket — a **deklaráló osztály** az egyetlen elválasztó.
+    - Ezért a szabály: publikus, nem statikus, argumentum nélkül hívható, nem `Illuminate\`
+      deklarálja, és ha van visszatérési típusa, az `Relation`. A csak `@return` docblockot viselő
+      reláció **továbbra is működik** — a szigorúbb szabály minden régebbi modellt eltörne.
+    - Új `UnsupportedRelation::notARelation()`: eddig a nem-reláció is „csak egy relációs szint
+      támogatott" üzenetet kapott, ami válasz egy fel nem tett kérdésre.
 - **A header-séma negyedik strukturális szabálya is ellenőrizve.** A `field` és a `fields`
   kölcsönösen kizárja egymást (`not: {required: [field, fields]}`), és a `Column::assertValid()`
   eddig a négy szabályból hármat nézett. A `set('fields', …)` escape-hatchen át kiadható volt egy

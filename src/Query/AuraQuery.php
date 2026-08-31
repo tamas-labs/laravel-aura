@@ -9,13 +9,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Expression;
 use TamasLabs\Aura\Exceptions\UnsupportedRelation;
 use TamasLabs\Aura\Request\AuraRequest;
 use TamasLabs\Aura\Request\Filter;
 use TamasLabs\Aura\Request\Search;
 use TamasLabs\Aura\Request\Sort;
+use TamasLabs\Aura\Support\Relations;
 
 /**
  * Turns a validated {@see AuraRequest} into constraints on an Eloquent query.
@@ -263,11 +263,13 @@ final class AuraQuery
             throw UnsupportedRelation::forNestedSort($field);
         }
 
-        $model = $query->getModel();
-        $relation = method_exists($model, $path) ? $model->{$path}() : null;
+        // Inspected before it is called: a whitelisted field is the table
+        // author's, not the client's, but a typo naming a real method would
+        // otherwise run it. See {@see Relations}.
+        $relation = Relations::on($query->getModel(), $path);
 
-        if (! $relation instanceof Relation) {
-            throw UnsupportedRelation::forNestedSort($field);
+        if ($relation === null) {
+            throw UnsupportedRelation::notARelation($field, $path);
         }
 
         $related = $relation->getRelated();

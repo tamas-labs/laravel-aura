@@ -930,6 +930,20 @@ pagination itself. A correlated subquery has no such effect; the price is that i
 a to-one relation, one level deep. Anything else raises `UnsupportedRelation` with a concrete
 suggestion.
 
+**A dotted field names a method, and the method is inspected before it is called.** `company.name`
+means "call `company()` on the model" — so `delete.x` would mean calling `delete()`, and finding
+out only afterwards that what came back was not a relation. Both the query layer and inference go
+through `Support\Relations`, which checks first: the method has to be public, callable with no
+arguments, **not declared by the framework**, and — if it declares a return type at all — that type
+has to be a `Relation`.
+
+The middle rule is the one doing the work: `Model::delete()`, `save()`, `push()` and about a
+hundred others are untyped, so nothing but the declaring class separates them from an equally
+untyped relation method on your own model. (Laravel's own `Model::isRelation()` is no help — it is
+`method_exists() || relationResolver()`.) A relation carrying only a `@return` docblock keeps
+working, which is why the guard stops where it does; what stays reachable is an untyped,
+side-effecting method on your own model, named by one of your own columns.
+
 ### AuraPayload
 
 ```php
@@ -955,7 +969,7 @@ Every exception this package raises on its own behalf implements
 | Exception | Raised when |
 | --- | --- |
 | `InvalidDefinition` | the table definition itself is wrong — see [the table above](#what-the-table-refuses-to-build) |
-| `UnsupportedRelation` | sorting through a to-many relation, or a nested relation path |
+| `UnsupportedRelation` | sorting through a to-many relation, a nested relation path, or a dotted field whose first segment is not a relation at all |
 | `UnsupportedPaginator` | the paginator cannot report `last_page` / `total` |
 
 These all report a mistake in the **table definition**, never in the client's input — malformed

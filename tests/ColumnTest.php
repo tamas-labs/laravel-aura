@@ -8,6 +8,7 @@ use TamasLabs\Aura\Table\Inference;
 use TamasLabs\Aura\Table\Presets\Money;
 use TamasLabs\Aura\Table\Presets\Options;
 use TamasLabs\Aura\Table\Presets\Timestamp;
+use TamasLabs\Aura\Tests\Fixtures\LegacyUser;
 use TamasLabs\Aura\Tests\Fixtures\Status;
 use TamasLabs\Aura\Tests\Fixtures\Tier;
 use TamasLabs\Aura\Tests\Fixtures\TypedUser;
@@ -211,3 +212,23 @@ it('refuses a selection column that was also given several fields', function ():
     // in the same invalid cell.
     Column::selection()->set('fields', ['a', 'b'])->resolve(new TypedUser);
 })->throws(InvalidDefinition::class, 'never from both');
+
+it('infers nothing through a method that is not a relation, without running it', function (): void {
+    // A dotted field names a method, and `method_exists()` was the only guard:
+    // `Column::make('delete.x')` used to call `$model->delete()` during the
+    // header build. Nothing here may run on the way to a default.
+    LegacyUser::$called = false;
+
+    $cell = Column::make('fullName.x')->resolve(new LegacyUser);
+
+    expect($cell)->toBe(['content' => 'Fullname X', 'field' => 'fullName.x', 'key' => 'fullName.x'])
+        ->and(LegacyUser::$called)->toBeFalse();
+});
+
+it('still infers through an untyped relation method', function (): void {
+    // The other half of the same guard: a relation carrying only a `@return`
+    // docblock has to keep working, or the fix would cost more than the hazard.
+    $cell = Column::make('company.name')->resolve(new LegacyUser);
+
+    expect($cell['field'])->toBe('company.name');
+});

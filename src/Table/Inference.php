@@ -6,9 +6,9 @@ namespace TamasLabs\Aura\Table;
 
 use BackedEnum;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Str;
 use TamasLabs\Aura\Contracts\AuraOption;
+use TamasLabs\Aura\Support\Relations;
 
 /**
  * Column defaults read out of the model.
@@ -106,13 +106,16 @@ final class Inference
         $path = substr($field, 0, $position);
         $attribute = substr($field, $position + 1);
 
-        if (str_contains($path, '.') || ! method_exists($model, $path)) {
+        if (str_contains($path, '.')) {
             return null;
         }
 
-        $relation = $model->{$path}();
+        // Never calls a method that is not a relation — a field naming, say,
+        // `delete.x` would otherwise run `$model->delete()` on the way to
+        // finding that out. See {@see Relations}.
+        $relation = Relations::on($model, $path);
 
-        return $relation instanceof Relation ? [$relation->getRelated(), $attribute] : null;
+        return $relation === null ? null : [$relation->getRelated(), $attribute];
     }
 
     /**

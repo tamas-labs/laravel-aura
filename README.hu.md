@@ -942,6 +942,21 @@ magát a lapozást töri el. A korrelált alkérdésnek nincs ilyen hatása; az 
 relációra, egy szint mélységben válaszol. Bármi más `UnsupportedRelation`-t dob, konkrét
 javaslattal.
 
+**A pontozott mező egy metódust nevez meg, és a metódus hívás *előtt* vizsgálatra kerül.** A
+`company.name` azt jelenti, hogy „hívd meg a modell `company()`-jét" — a `delete.x` tehát azt
+jelentené, hogy meghívjuk a `delete()`-et, és csak utána derül ki, hogy nem reláció jött vissza. A
+lekérdezésréteg és az inference is a `Support\Relations`-on megy át, ami előbb ellenőriz: a
+metódus legyen publikus, argumentum nélkül hívható, **ne a keretrendszer deklarálja**, és ha
+egyáltalán van visszatérési típusa, az legyen `Relation`.
+
+A középső szabály végzi az érdemi munkát: a `Model::delete()`, `save()`, `push()` és további
+mintegy száz metódus **típusjelölés nélküli**, tehát a deklaráló osztályon kívül semmi nem
+különbözteti meg őket egy ugyanilyen típusjelölés nélküli reláció-metódustól a saját modelleden.
+(A Laravel `Model::isRelation()`-je itt nem segít — az `method_exists() || relationResolver()`.) A
+csak `@return` docblockot viselő reláció továbbra is működik, ezért áll meg itt az őr; ami elérhető
+marad, az egy típusjelölés nélküli, mellékhatásos metódus a saját modelleden, a saját oszlopoddal
+megnevezve.
+
 ### AuraPayload
 
 ```php
@@ -967,7 +982,7 @@ Minden kivétel, amit ez a csomag a saját nevében dob, implementálja a
 | Kivétel | Mikor dobódik |
 | --- | --- |
 | `InvalidDefinition` | maga a tábla-definíció hibás — lásd [a fenti táblázatot](#amit-a-tábla-nem-hajlandó-felépíteni) |
-| `UnsupportedRelation` | to-many reláción vagy beágyazott relációs úton keresztüli rendezés |
+| `UnsupportedRelation` | to-many reláción vagy beágyazott relációs úton keresztüli rendezés, illetve ha a pontozott mező első szakasza egyáltalán nem reláció |
 | `UnsupportedPaginator` | a paginátor nem tudja a `last_page` / `total` értéket |
 
 Mindegyik a **tábla definíciójában** lévő hibát jelent, nem a kliens inputjában lévőt — a hibás
