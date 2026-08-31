@@ -6,6 +6,28 @@ szerződés verziója külön él a csomagverziótól.
 
 ## [Unreleased]
 
+### Biztonság
+
+- **A kérés minden listája és minden sztringje korlátozva van.** Eddig csak a `paginate` volt az;
+  mérve, 5 000 `sortable` bejegyzés **125 kB SQL**-t épített, a `globalSearch` 200 000 karaktert
+  fogadott el, a `selected` 50 000 azonosítót. Mindhárom 422 lett.
+    - **A három mezőlistát a whitelist korlátozza, configkulcs nélkül.** Az Aura mezőnként egyetlen
+      bejegyzést tart (`use-sorting.ts:23`, `use-searching.ts:45`, `use-filtering.ts:41`), tehát a
+      `FieldPermissions` már a pontos plafon: három rendezhető oszlop három rendezést enged. A
+      hosszellenőrzés **azelőtt** fut, hogy bármi végigmenne a sorokon.
+    - **Ugyanaz a mező kétszer egy listában 422.** Az Aura ilyet nem küld, és két rendezés ugyanarra
+      a mezőre `ORDER BY x ASC, x DESC`-et jelentene.
+    - **`RequestLimits`** value object és **`aura.limits`** configblokk a maradéknak:
+      `limits.selected` (1000), `limits.values` (200), `limits.term` (255). A `selected` az egyetlen
+      lista, amire a szerver nem tud plafont származtatni — a kijelölés túléli a lapozást. Hiányzó
+      vagy nem pozitív configérték a csomagolt alapértékre esik vissza, nem a „nincs korlát"-ra.
+
+### Módosítva
+
+- **`AuraRequest::fromHttp()` / `fromArray()` harmadik paramétere `?int $maxPaginate` helyett
+  `?RequestLimits $limits`.** A `paginate` plafonja változatlanul az `aura.pagination.max`, csak már
+  a többi korláttal együtt utazik, és egyetlen limit felülírása nem dobja el a többit.
+
 ### Hozzáadva
 
 - **Docker-alapú fejlesztői környezet** (F0): egyetlen `php` service `php:8.4-cli-alpine`-on,

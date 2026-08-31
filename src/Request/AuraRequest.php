@@ -13,12 +13,18 @@ use TamasLabs\Aura\Query\FieldPermissions;
 /**
  * One parsed, validated Aura request.
  *
- * Everything here arrived from the browser. Two rules follow from that, and both
- * are enforced on the way in rather than left to the caller:
+ * Everything here arrived from the browser. Three rules follow from that, and
+ * all three are enforced on the way in rather than left to the caller:
  *
  * - every `field` is checked against {@see FieldPermissions} before it is kept;
  * - `paginate` is clamped to a configured ceiling, so a client cannot ask for
- *   the whole table in one page.
+ *   the whole table in one page;
+ * - **every list and every string is bounded**, so a client cannot ask for an
+ *   unbounded amount of work. The three field lists are bounded by the
+ *   whitelist itself — Aura sends at most one entry per field, so a table
+ *   offering three sortable columns accepts three sorts — and the rest by
+ *   {@see RequestLimits}. The bound on the lists is checked before anything
+ *   walks their rows.
  *
  * Anything malformed raises {@see ValidationException}, which Laravel renders as
  * a 422 — never a 500, and never a silently ignored parameter.
@@ -66,13 +72,13 @@ final readonly class AuraRequest
     /**
      * Parse and validate an incoming HTTP request.
      *
-     * @param  int|null  $maxPaginate  Ceiling for `paginate`; defaults to `aura.pagination.max`.
+     * @param  RequestLimits|null  $limits  Ceilings for this request; defaults to `config('aura.*')`.
      *
      * @throws ValidationException On anything the contract does not allow.
      */
-    public static function fromHttp(Request $request, FieldPermissions $fields, ?int $maxPaginate = null): self
+    public static function fromHttp(Request $request, FieldPermissions $fields, ?RequestLimits $limits = null): self
     {
-        return self::fromArray(self::payload($request), $fields, $maxPaginate);
+        return self::fromArray(self::payload($request), $fields, $limits);
     }
 
     /**
@@ -82,12 +88,19 @@ final readonly class AuraRequest
      *
      * @throws ValidationException
      */
-    public static function fromArray(array $payload, FieldPermissions $fields, ?int $maxPaginate = null): self
+    public static function fromArray(array $payload, FieldPermissions $fields, ?RequestLimits $limits = null): self
     {
+        $limits ??= RequestLimits::fromConfig();
+
         self::rejectUnknownKeys($payload, self::TOP_LEVEL_KEYS, 'request');
+
+        // Before anything walks the rows: an oversized list is refused while
+        // counting it is still the only work done on it.
+        self::assertListsAreBounded($payload, $fields, $limits);
+
         self::rejectUnknownNestedKeys($payload);
 
-        $validated = self::validate($payload);
+        $validated = self::validate($payload, $limits);
 
         $sortable = self::sorts(self::rows($validated, 'sortable'), $fields);
         $searchable = self::searches(self::rows($validated, 'searchable'), $fields);
@@ -95,7 +108,7 @@ final readonly class AuraRequest
 
         return new self(
             page: self::integer($validated, 'page'),
-            paginate: self::boundedPaginate(self::integer($validated, 'paginate'), $maxPaginate),
+            paginate: min(self::integer($validated, 'paginate'), $limits->paginate),
             sortable: $sortable,
             searchable: $searchable,
             filterable: $filterable,
@@ -196,7 +209,7 @@ final readonly class AuraRequest
      *
      * @throws ValidationException
      */
-    private static function validate(array $payload): array
+    private static function validate(array $payload, RequestLimits $limits): array
     {
         $scalarId = static function (string $attribute, mixed $value, Closure $fail): void {
             if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
@@ -217,7 +230,10 @@ final readonly class AuraRequest
             'searchable' => ['sometimes', 'array'],
             'searchable.*' => ['array'],
             'searchable.*.field' => ['required', 'string'],
-            'searchable.*.term' => ['sometimes', 'string'],
+            // Aura sets no maxlength on either search input, so the ceiling has
+            // to be here: a LIKE term longer than the column it searches cannot
+            // match anything, it can only cost.
+            'searchable.*.term' => ['sometimes', 'string', 'max:'.$limits->term],
             'searchable.*.exact' => ['sometimes', 'boolean'],
             'searchable.*.min' => ['sometimes', 'nullable', $scalarId],
             'searchable.*.max' => ['sometimes', 'nullable', $scalarId],
@@ -226,8 +242,14 @@ final readonly class AuraRequest
             'filterable.*.field' => ['required', 'string'],
             // `present`, not `required`: Laravel treats an empty array as missing,
             // while the contract requires the key and allows an empty selection.
-            'filterable.*.values' => ['present', 'array'],
-            'globalSearch' => ['sometimes', 'string'],
+            // The ceiling is a config value rather than the column's `elements`,
+            // because `elements` is optional — Aura derives the options from the
+            // loaded rows when a column declares none.
+            'filterable.*.values' => ['present', 'array', 'max:'.$limits->values],
+            'globalSearch' => ['sometimes', 'string', 'max:'.$limits->term],
+            // No `max` here: assertListsAreBounded() already refused an
+            // oversized selection, and it did so before this rule set would
+            // have run the closure below once per id.
             'selected' => ['sometimes', 'array'],
             'selected.*' => ['required', $scalarId],
         ])->validate();
@@ -294,11 +316,14 @@ final readonly class AuraRequest
     private static function sorts(array $rows, FieldPermissions $fields): array
     {
         $sorts = [];
+        $seen = [];
 
         foreach ($rows as $row) {
             $field = self::field($row);
 
             self::guard($fields->allowsSort($field), $field, 'sorted by');
+            self::guardUnique($seen, $field, 'sortable');
+            $seen[$field] = true;
 
             // Validation already rejected anything else; this narrows the type.
             $sorts[] = new Sort($field, ($row['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc');
@@ -316,11 +341,14 @@ final readonly class AuraRequest
     private static function searches(array $rows, FieldPermissions $fields): array
     {
         $searches = [];
+        $seen = [];
 
         foreach ($rows as $row) {
             $field = self::field($row);
 
             self::guard($fields->allowsSearch($field), $field, 'searched');
+            self::guardUnique($seen, $field, 'searchable');
+            $seen[$field] = true;
 
             $term = $row['term'] ?? null;
 
@@ -345,11 +373,14 @@ final readonly class AuraRequest
     private static function filters(array $rows, FieldPermissions $fields): array
     {
         $filters = [];
+        $seen = [];
 
         foreach ($rows as $row) {
             $field = self::field($row);
 
             self::guard($fields->allowsFilter($field), $field, 'filtered by');
+            self::guardUnique($seen, $field, 'filterable');
+            $seen[$field] = true;
 
             $values = $row['values'] ?? [];
 
@@ -434,13 +465,102 @@ final readonly class AuraRequest
     }
 
     /**
-     * Clamp the page size to the configured ceiling.
+     * Refuse a list longer than anything the table could have produced.
+     *
+     * The three field lists need no configured ceiling: Aura keeps one entry
+     * per field (`use-sorting.ts:23`, `use-searching.ts:45`,
+     * `use-filtering.ts:41` all look the field up before pushing), so the
+     * whitelist is already the exact bound — and one derived from the columns
+     * cannot go stale the way a number in a config file can.
+     *
+     * `selected` is the exception, and the reason {@see RequestLimits} exists:
+     * the selection survives paging (Aura persists it and merges by union in
+     * `use-selection.ts`), so nothing on the server can derive a ceiling for it.
+     *
+     * @param  array<array-key, mixed>  $payload
+     *
+     * @throws ValidationException
      */
-    private static function boundedPaginate(int $paginate, ?int $maxPaginate): int
-    {
-        $max = $maxPaginate ?? config('aura.pagination.max');
-        $max = is_numeric($max) ? (int) $max : $paginate;
+    private static function assertListsAreBounded(
+        array $payload,
+        FieldPermissions $fields,
+        RequestLimits $limits,
+    ): void {
+        $offered = [
+            'sortable' => count($fields->sortable),
+            'searchable' => count($fields->searchable),
+            'filterable' => count($fields->filterable),
+        ];
 
-        return $max > 0 ? min($paginate, $max) : $paginate;
+        foreach ($offered as $key => $ceiling) {
+            $count = self::countOf($payload, $key);
+
+            if ($count > $ceiling) {
+                throw ValidationException::withMessages([
+                    $key => sprintf(
+                        'The %s list carries %d entries; this table offers %d %s field(s), '
+                        .'and Aura sends at most one entry per field.',
+                        $key,
+                        $count,
+                        $ceiling,
+                        $key,
+                    ),
+                ]);
+            }
+        }
+
+        $selected = self::countOf($payload, 'selected');
+
+        if ($selected > $limits->selected) {
+            throw ValidationException::withMessages([
+                'selected' => sprintf(
+                    'The selection carries %d ids; this endpoint accepts %d. '
+                    .'Raise aura.limits.selected if that is genuinely too few.',
+                    $selected,
+                    $limits->selected,
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * How many entries one top-level list carries, before anything is known
+     * about their shape.
+     *
+     * @param  array<array-key, mixed>  $payload
+     */
+    private static function countOf(array $payload, string $key): int
+    {
+        $value = $payload[$key] ?? null;
+
+        return is_array($value) ? count($value) : 0;
+    }
+
+    /**
+     * Refuse the same field twice in one list.
+     *
+     * Aura never sends one: it looks the field up and updates the existing
+     * entry instead of pushing a second. Two sorts on one field would mean
+     * `ORDER BY x ASC, x DESC`, which is not a thing the user asked for — and
+     * refusing the repeat is also what makes the whitelist an exact bound
+     * rather than merely a generous one.
+     *
+     * @param  array<string, true>  $seen
+     *
+     * @throws ValidationException
+     */
+    private static function guardUnique(array $seen, string $field, string $key): void
+    {
+        if (! isset($seen[$field])) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            $key => sprintf(
+                'The %s list names the field "%s" more than once; Aura sends at most one entry per field.',
+                $key,
+                $field,
+            ),
+        ]);
     }
 }

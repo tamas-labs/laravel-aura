@@ -15,6 +15,8 @@ and it answers the request.
 - 🔒 **The whitelist comes from the columns** — every `field` in the request is attacker
   controlled, and nothing reaches the query except through a column that offered it; an unlisted
   field is a 422, never a silently ignored parameter
+- 🧯 **Every list and string in a request is bounded** — and the three field lists need no config
+  key for it, because the whitelist is already their exact ceiling
 - 🪄 **Defaults inferred from the model** — a `decimal` cast means money, a `datetime` cast means
   a range search, an enum cast means exactly which options the filter may offer
 - 🔎 **Search** (substring, exact, or a range with either end open), **filter** with `NULL`
@@ -109,13 +111,23 @@ That is the whole endpoint. Aura fetches with `POST` by default, so route it acc
 // config/aura.php
 return [
     'pagination' => [
-        'max' => 100,     // hard ceiling on the client's `paginate`, clamped rather than rejected
+        'max' => 100,          // hard ceiling on the client's `paginate`, clamped rather than rejected
+    ],
+
+    'limits' => [
+        'selected' => 1000,    // ids in `selected[]`
+        'values' => 200,       // values in one filter dropdown
+        'term' => 255,         // characters in `globalSearch` and `searchable[].term`
     ],
 ];
 ```
 
 There is deliberately no default page size: `paginate` is required by the contract, and defaulting
 a missing one would turn a broken client into a silently short page instead of a 422.
+
+The `sortable`, `searchable` and `filterable` lists have no key here because they need none: Aura
+sends at most one entry per field, so the column whitelist is already their exact ceiling. See
+[What bounds a request](./README.en.md#what-bounds-a-request).
 
 ## Four things worth knowing up front
 

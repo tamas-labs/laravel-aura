@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Validation\ValidationException;
 use TamasLabs\Aura\Query\FieldPermissions;
 use TamasLabs\Aura\Request\AuraRequest;
+use TamasLabs\Aura\Request\RequestLimits;
 use TamasLabs\AuraSchema\AuraSchema;
 
 /**
@@ -163,4 +164,132 @@ it('keeps selected ids without letting them near the whitelist', function (): vo
     );
 
     expect($request->selected)->toBe([4, '7']);
+});
+
+it('refuses more entries than the table has fields to offer', function (): void {
+    // The whitelist is the ceiling, and it is exact: Aura keeps one entry per
+    // field, so a table offering two sortable columns can never have produced a
+    // third sort. Before this, 5 000 entries built 125 kB of SQL.
+    AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'sortable' => array_fill(0, 5_000, ['field' => 'last_name', 'direction' => 'asc']),
+    ], new FieldPermissions(sortable: ['last_name', 'created_at']));
+})->throws(ValidationException::class, 'at most one entry per field');
+
+it('bounds each list by its own whitelist, not by a number', function (): void {
+    // Three sortable columns really do allow three sorts — the ceiling follows
+    // the columns rather than a config value that could go stale beside them.
+    $fields = new FieldPermissions(sortable: ['a', 'b', 'c']);
+
+    $request = AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'sortable' => [
+            ['field' => 'a', 'direction' => 'asc'],
+            ['field' => 'b', 'direction' => 'desc'],
+            ['field' => 'c', 'direction' => 'asc'],
+        ],
+    ], $fields);
+
+    expect($request->sortable)->toHaveCount(3);
+
+    AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'sortable' => [
+            ['field' => 'a', 'direction' => 'asc'],
+            ['field' => 'b', 'direction' => 'desc'],
+            ['field' => 'c', 'direction' => 'asc'],
+            ['field' => 'a', 'direction' => 'desc'],
+        ],
+    ], $fields);
+})->throws(ValidationException::class);
+
+it('refuses the same field twice in one list', function (string $key, array $entry): void {
+    // Aura updates the existing entry instead of pushing a second one, so a
+    // repeat is never something the table produced — and two sorts on one field
+    // would mean ORDER BY x ASC, x DESC.
+    AuraRequest::fromArray(
+        ['page' => 1, 'paginate' => 10, $key => [$entry, $entry]],
+        new FieldPermissions(
+            sortable: ['last_name', 'created_at'],
+            searchable: ['last_name', 'created_at'],
+            filterable: ['status', 'tier'],
+        ),
+    );
+})->with([
+    ['sortable', ['field' => 'last_name', 'direction' => 'asc']],
+    ['searchable', ['field' => 'last_name', 'term' => 'x']],
+    ['filterable', ['field' => 'status', 'values' => ['active']]],
+])->throws(ValidationException::class, 'more than once');
+
+it('refuses a search term longer than the ceiling', function (): void {
+    AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'searchable' => [['field' => 'last_name', 'term' => str_repeat('a', 256)]],
+    ], new FieldPermissions(searchable: ['last_name']));
+})->throws(ValidationException::class);
+
+it('refuses a global search longer than the ceiling', function (): void {
+    // Measured before the ceiling existed: 200 000 characters were accepted, and
+    // became one LIKE '%…%' per global-search field.
+    AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'globalSearch' => str_repeat('a', 200_000),
+    ], new FieldPermissions(globalSearch: ['last_name']));
+})->throws(ValidationException::class);
+
+it('refuses a selection larger than the ceiling', function (): void {
+    // The one list nothing on the server can derive a bound for: the selection
+    // survives paging, so it grows with what the user ticks.
+    AuraRequest::fromArray(
+        ['page' => 1, 'paginate' => 10, 'selected' => range(1, 50_000)],
+        FieldPermissions::none(),
+    );
+})->throws(ValidationException::class, 'aura.limits.selected');
+
+it('refuses a filter carrying more values than the ceiling', function (): void {
+    AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'filterable' => [['field' => 'status', 'values' => range(1, 201)]],
+    ], new FieldPermissions(filterable: ['status']));
+})->throws(ValidationException::class);
+
+it('takes an explicit limit over the configured one', function (): void {
+    config()->set('aura.limits.term', 255);
+
+    AuraRequest::fromArray(
+        ['page' => 1, 'paginate' => 10, 'globalSearch' => 'abcdefghijk'],
+        new FieldPermissions(globalSearch: ['last_name']),
+        new RequestLimits(term: 10),
+    );
+})->throws(ValidationException::class);
+
+it('leaves the limits it was not given at their configured values', function (): void {
+    // A partial override must not quietly discard the host app's config for
+    // everything else.
+    config()->set('aura.pagination.max', 40);
+
+    $limits = new RequestLimits(term: 10);
+
+    expect($limits->term)->toBe(10)
+        ->and($limits->paginate)->toBe(40)
+        ->and($limits->selected)->toBe(RequestLimits::SELECTED);
+});
+
+it('falls back to the packaged default rather than to no limit', function (): void {
+    // A limit a broken config can switch off is not a limit.
+    config()->set('aura.limits.selected', 0);
+    config()->set('aura.limits.term', 'not a number');
+    config()->set('aura.pagination.max', null);
+
+    $limits = RequestLimits::fromConfig();
+
+    expect($limits->selected)->toBe(RequestLimits::SELECTED)
+        ->and($limits->term)->toBe(RequestLimits::TERM)
+        ->and($limits->paginate)->toBe(RequestLimits::PAGINATE);
 });

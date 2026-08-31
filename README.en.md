@@ -18,6 +18,7 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
+  - [`limits` — the rest of the payload](#limits--the-rest-of-the-payload)
 - [Defining a table](#defining-a-table)
 - [Columns](#columns)
 - [Inference](#inference)
@@ -38,6 +39,7 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [The query layer on its own](#the-query-layer-on-its-own)
   - [FieldPermissions](#fieldpermissions)
   - [AuraRequest](#aurarequest)
+  - [What bounds a request](#what-bounds-a-request)
   - [AuraQuery](#auraquery)
   - [AuraPayload](#aurapayload)
 - [Exceptions](#exceptions)
@@ -111,12 +113,16 @@ php artisan vendor:publish --tag=aura-config
 
 ## Configuration
 
-`config/aura.php` has exactly one key today:
-
 ```php
 return [
     'pagination' => [
-        'max' => 100,
+        'max' => 100,          // ceiling on the client's `paginate` — clamped
+    ],
+
+    'limits' => [
+        'selected' => 1000,    // ids in `selected`
+        'values' => 200,       // values in one filter dropdown
+        'term' => 255,         // characters in `globalSearch` and `searchable[].term`
     ],
 ];
 ```
@@ -131,6 +137,31 @@ and there is nothing to gain by also breaking the page.
 
 There is deliberately **no default page size**. The request contract makes `paginate` required;
 defaulting a missing one would turn a broken client into a silently short page instead of a 422.
+
+### `limits` — the rest of the payload
+
+`paginate` is not the only attacker-controlled number in a request. **`limits`** bounds the three
+things nothing else can:
+
+| Key | Default | Bounds |
+| --- | --- | --- |
+| `limits.selected` | 1000 | ids in `selected[]` |
+| `limits.values` | 200 | values in one `filterable[].values` |
+| `limits.term` | 255 | characters in `globalSearch` and in a `searchable[].term` |
+
+Exceeding one of these is a **422, not a clamp**. The `paginate` argument for clamping is that a
+stale client keeps working; nothing legitimate produces a 200 000-character search term, so there
+is no working client to keep.
+
+**Notice what is *not* here.** The `sortable`, `searchable` and `filterable` lists have no key,
+because they need none — see [What bounds a request](#what-bounds-a-request).
+
+`values` is a config value rather than the column's own `elements` because `elements` is optional:
+a column that declares none lets Aura build the filter options from the loaded rows, so there is
+nothing on the server to derive a ceiling from.
+
+A missing or non-positive configured value falls back to the packaged default rather than to "no
+limit" — a limit a broken config can switch off is not a limit.
 
 ---
 
@@ -782,8 +813,8 @@ Four properties hold, and each has a test pinning it:
 ### AuraRequest
 
 ```php
-AuraRequest::fromHttp(Request $request, FieldPermissions $fields, ?int $maxPaginate = null): self
-AuraRequest::fromArray(array $payload, FieldPermissions $fields, ?int $maxPaginate = null): self
+AuraRequest::fromHttp(Request $request, FieldPermissions $fields, ?RequestLimits $limits = null): self
+AuraRequest::fromArray(array $payload, FieldPermissions $fields, ?RequestLimits $limits = null): self
 ```
 
 `fromHttp` reads the payload from where the contract puts it: the JSON body on `POST` / `PUT` /
@@ -794,11 +825,11 @@ on anything the contract does not allow.
 | --- | --- | --- | --- |
 | `page` | integer ≥ 1 | **yes** | |
 | `paginate` | integer ≥ 1 | **yes** | clamped to `pagination.max` |
-| `sortable[]` | `{field, direction}` | no | `direction` is `asc` or `desc` |
-| `searchable[]` | `{field, term?, exact?, min?, max?}` | no | term search or range search |
-| `filterable[]` | `{field, values[]}` | no | `values` may be empty, but must be present |
-| `globalSearch` | string | no | |
-| `selected[]` | string / number | no | row ids for bulk actions |
+| `sortable[]` | `{field, direction}` | no | `direction` is `asc` or `desc`; one entry per field |
+| `searchable[]` | `{field, term?, exact?, min?, max?}` | no | term search or range search; one entry per field |
+| `filterable[]` | `{field, values[]}` | no | `values` may be empty, but must be present; one entry per field |
+| `globalSearch` | string | no | at most `limits.term` characters |
+| `selected[]` | string / number | no | row ids for bulk actions; at most `limits.selected` |
 
 Unknown properties are rejected — at the top level *and* inside the nested objects. The nested
 check runs on the raw payload on purpose: Laravel's validator drops every key it has no rule for,
@@ -812,6 +843,41 @@ user did not ask for it.
 
 ```php
 User::whereKey($aura->selected)->each->archive();
+```
+
+### What bounds a request
+
+Every list and every string in a request is bounded before any of it reaches the query. Two
+different mechanisms, and the split is the interesting part.
+
+**The three field lists are bounded by the whitelist itself — there is no config key for them.**
+Aura keeps exactly one entry per field: `use-sorting.ts`, `use-searching.ts` and `use-filtering.ts`
+all look the field up and update the existing entry instead of pushing a second one. So a table
+offering three sortable columns can never have produced a fourth sort, and `FieldPermissions` is
+already the exact ceiling. Deriving it beats configuring it twice over: it is tighter than any
+number worth defaulting to, and it cannot go stale when the columns change.
+
+Two rules follow, both **422**:
+
+- a list longer than the whitelist it draws from — checked *before* anything walks its rows, so an
+  oversized payload is refused while counting it is still the only work done on it;
+- the same field twice in one list. Aura never sends one, and two sorts on one field would mean
+  `ORDER BY x ASC, x DESC`.
+
+**Everything else comes from `limits`** — the search terms, the selection, the values of one
+filter. See [Configuration](#limits--the-rest-of-the-payload) for the keys.
+
+`selected` is the one list the server cannot derive a bound for: the selection survives paging
+(Aura persists it and merges by union), so it grows with what the user ticks rather than with the
+table. That is why it needs a number.
+
+Pass a `RequestLimits` to override any of them for one call — anything left `null` comes from
+config, so a partial override does not discard the rest:
+
+```php
+use TamasLabs\Aura\Request\RequestLimits;
+
+AuraRequest::fromHttp($request, $fields, new RequestLimits(paginate: 50));
 ```
 
 ### AuraQuery

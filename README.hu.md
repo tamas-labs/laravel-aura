@@ -19,6 +19,7 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [Követelmények](#követelmények)
 - [Telepítés](#telepítés)
 - [Konfiguráció](#konfiguráció)
+  - [`limits` — a payload többi része](#limits--a-payload-többi-része)
 - [Egy tábla definiálása](#egy-tábla-definiálása)
 - [Oszlopok](#oszlopok)
 - [Következtetés a modellből](#következtetés-a-modellből)
@@ -39,6 +40,7 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [A query-réteg önmagában](#a-query-réteg-önmagában)
   - [FieldPermissions](#fieldpermissions)
   - [AuraRequest](#aurarequest)
+  - [Mi korlátozza a kérést](#mi-korlátozza-a-kérést)
   - [AuraQuery](#auraquery)
   - [AuraPayload](#aurapayload)
 - [Kivételek](#kivételek)
@@ -113,12 +115,16 @@ php artisan vendor:publish --tag=aura-config
 
 ## Konfiguráció
 
-A `config/aura.php` ma pontosan egy kulcsot tartalmaz:
-
 ```php
 return [
     'pagination' => [
-        'max' => 100,
+        'max' => 100,          // plafon a kliens `paginate`-jére — vágódik
+    ],
+
+    'limits' => [
+        'selected' => 1000,    // azonosítók a `selected`-ben
+        'values' => 200,       // értékek egy szűrő-legördülőben
+        'term' => 255,         // karakterek a `globalSearch`-ben és a `searchable[].term`-ben
     ],
 ];
 ```
@@ -133,6 +139,31 @@ plafon az adatbázist védi, és semmit nem nyerünk azzal, ha közben az oldalt
 
 Alapértelmezett oldalméret szándékosan **nincs.** A kérés-szerződésben a `paginate` kötelező; ha a
 hiányzót defaultolnánk, egy hibás kliensből csendben rövid oldal lenne 422 helyett.
+
+### `limits` — a payload többi része
+
+A `paginate` nem az egyetlen támadó által vezérelt szám a kérésben. A **`limits`** azt a három
+dolgot korlátozza, amit semmi más nem tud:
+
+| Kulcs | Alapérték | Mit korlátoz |
+| --- | --- | --- |
+| `limits.selected` | 1000 | azonosítók a `selected[]`-ben |
+| `limits.values` | 200 | értékek egy `filterable[].values`-ban |
+| `limits.term` | 255 | karakterek a `globalSearch`-ben és egy `searchable[].term`-ben |
+
+Ezek túllépése **422, nem vágás.** A `paginate`-nél a vágás mellett az szól, hogy az elavult
+kliens tovább működik; egy 200 000 karakteres keresőkifejezést viszont semmi legitim nem állít elő,
+tehát nincs is mit működésben tartani.
+
+**Figyeljük meg, mi *nincs* itt.** A `sortable`, `searchable` és `filterable` listáknak nincs
+kulcsuk, mert nincs is rá szükségük — lásd [Mi korlátozza a kérést](#mi-korlátozza-a-kérést).
+
+A `values` azért configérték és nem az oszlop saját `elements`-e, mert az `elements` opcionális: ha
+egy oszlop nem ad meg egyet sem, az Aura a betöltött sorokból építi a szűrő opcióit — a szervernek
+nincs miből plafont származtatnia.
+
+A hiányzó vagy nem pozitív configérték a csomagolt alapértékre esik vissza, nem a „nincs korlát"-ra
+— az a korlát, amit egy elrontott config ki tud kapcsolni, nem korlát.
 
 ---
 
@@ -789,8 +820,8 @@ Négy tulajdonság érvényes, mindegyiket teszt rögzíti:
 ### AuraRequest
 
 ```php
-AuraRequest::fromHttp(Request $request, FieldPermissions $fields, ?int $maxPaginate = null): self
-AuraRequest::fromArray(array $payload, FieldPermissions $fields, ?int $maxPaginate = null): self
+AuraRequest::fromHttp(Request $request, FieldPermissions $fields, ?RequestLimits $limits = null): self
+AuraRequest::fromArray(array $payload, FieldPermissions $fields, ?RequestLimits $limits = null): self
 ```
 
 A `fromHttp` onnan olvassa a payloadot, ahová a szerződés teszi: `POST` / `PUT` / `PATCH` esetén a
@@ -801,11 +832,11 @@ JSON-törzsből, `GET` / `DELETE` esetén a query-paraméterekből. Mindkettő `
 | --- | --- | --- | --- |
 | `page` | egész ≥ 1 | **igen** | |
 | `paginate` | egész ≥ 1 | **igen** | a `pagination.max`-ra vágódik |
-| `sortable[]` | `{field, direction}` | nem | a `direction` `asc` vagy `desc` |
-| `searchable[]` | `{field, term?, exact?, min?, max?}` | nem | szöveges vagy tartománykeresés |
-| `filterable[]` | `{field, values[]}` | nem | a `values` lehet üres, de jelen kell lennie |
-| `globalSearch` | string | nem | |
-| `selected[]` | string / szám | nem | sor-azonosítók a köteges műveletekhez |
+| `sortable[]` | `{field, direction}` | nem | a `direction` `asc` vagy `desc`; mezőnként egy bejegyzés |
+| `searchable[]` | `{field, term?, exact?, min?, max?}` | nem | szöveges vagy tartománykeresés; mezőnként egy bejegyzés |
+| `filterable[]` | `{field, values[]}` | nem | a `values` lehet üres, de jelen kell lennie; mezőnként egy bejegyzés |
+| `globalSearch` | string | nem | legfeljebb `limits.term` karakter |
+| `selected[]` | string / szám | nem | sor-azonosítók a köteges műveletekhez; legfeljebb `limits.selected` |
 
 Az ismeretlen property elutasításra kerül — a legfelső szinten *és* a beágyazott objektumokban is.
 A beágyazott ellenőrzés szándékosan a nyers payloadon fut: a Laravel validátora eldob minden
@@ -819,6 +850,42 @@ felhasználó nem ezt kérte.
 
 ```php
 User::whereKey($aura->selected)->each->archive();
+```
+
+### Mi korlátozza a kérést
+
+A kérés minden listája és minden sztringje korlátozva van, mielőtt bármelyik elérné a lekérdezést.
+Két különböző mechanizmus, és pont a kettő szétválasztása az érdekes.
+
+**A három mezőlistát maga a whitelist korlátozza — nincs hozzájuk configkulcs.** Az Aura mezőnként
+pontosan egy bejegyzést tart: a `use-sorting.ts`, a `use-searching.ts` és a `use-filtering.ts` is
+megkeresi a mezőt, és a meglévő bejegyzést frissíti ahelyett, hogy másodikat fűzne hozzá. Egy három
+rendezhető oszlopot kínáló tábla tehát soha nem állíthatott elő negyedik rendezést, vagyis a
+`FieldPermissions` már most is a pontos plafon. A származtatás két okból is jobb a konfigurálásnál:
+szorosabb minden észszerű alapértéknél, és nem tud elavulni, amikor az oszlopok változnak.
+
+Két szabály következik belőle, mindkettő **422**:
+
+- a whitelistjénél hosszabb lista — és ez *azelőtt* ellenőrződik, hogy bármi végigmenne a sorain,
+  tehát a túlméretes payload akkor kerül elutasításra, amikor a megszámolása még az egyetlen munka,
+  amit elvégeztünk rajta;
+- ugyanaz a mező kétszer egy listában. Az Aura ilyet sosem küld, és két rendezés ugyanarra a mezőre
+  `ORDER BY x ASC, x DESC`-et jelentene.
+
+**Minden más a `limits`-ből jön** — a keresőkifejezések, a kijelölés, egy szűrő értékei. A kulcsokat
+lásd a [Konfigurációnál](#limits--a-payload-többi-része).
+
+A `selected` az az egyetlen lista, amire a szerver nem tud plafont származtatni: a kijelölés túléli
+a lapozást (az Aura perzisztálja és unióval fésüli össze), tehát azzal nő, amit a felhasználó
+kipipál, nem a táblával. Ezért kell hozzá szám.
+
+Egy hívásra bármelyik felülírható `RequestLimits`-szel — ami `null` marad, az a configból jön, tehát
+a részleges felülírás nem dobja el a többit:
+
+```php
+use TamasLabs\Aura\Request\RequestLimits;
+
+AuraRequest::fromHttp($request, $fields, new RequestLimits(paginate: 50));
 ```
 
 ### AuraQuery
