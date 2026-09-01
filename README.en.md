@@ -54,6 +54,10 @@ fields the query will accept come out of the same definition, so they cannot dri
   - [AuraPayload](#aurapayload)
 - [Exceptions](#exceptions)
 - [The wire contract](#the-wire-contract)
+- [Versioning](#versioning)
+  - [What semver covers](#what-semver-covers)
+  - [What the contract's own version covers](#what-the-contracts-own-version-covers)
+  - [Before the tag](#before-the-tag)
 - [Validating your own payloads](#validating-your-own-payloads)
 - [Development](#development)
   - [The demo application](#the-demo-application)
@@ -64,15 +68,16 @@ fields the query will accept come out of the same definition, so they cannot dri
 
 ## Status
 
-The package is at **F6.3** of its plan: a table is a class, it serves a request end to end, its
+The package is at **F6.4** of its plan: a table is a class, it serves a request end to end, its
 cells render as more than text, the four resource actions are one call — customised or not — a
 cell can be offered to some rows and not others, `make:aura-table` writes the first draft, and the
-reference documentation is now held up by a test rather than by discipline.
+reference documentation — and the versioning promise under it — is held up by a test rather than
+by discipline.
 
 | Works today | Not built yet |
 | --- | --- |
-| `AuraTable` — one class per table, `respond($request)` | The contract-version promise (F6.4) |
-| Columns, groups, footers, table settings | The Packagist release (F6.5) |
+| `AuraTable` — one class per table, `respond($request)` | The Packagist release (F6.5) |
+| Columns, groups, footers, table settings | |
 | Column defaults inferred from the model's casts | |
 | The field whitelist, derived from the columns | |
 | Sorting, searching, filtering, global search | |
@@ -85,8 +90,9 @@ reference documentation is now held up by a test rather than by discipline.
 | `make:aura-table`, scaffolded from the model's table | |
 | A runnable demo app (`composer serve`) | |
 | A documentation-coverage guard over both references | |
+| A stated, tested versioning promise | |
 
-What is left is the release itself: the contract-version promise, and the tag.
+What is left is the release itself: the tag.
 
 The package is **not released**: no tag, not on Packagist. Install it from the repository.
 
@@ -94,10 +100,12 @@ The package is **not released**: no tag, not on Packagist. Install it from the r
 
 ## Requirements
 
-- **PHP** 8.3 or 8.4
-- **Laravel** 12 or 13 (`illuminate/support`, `illuminate/contracts`)
+- **PHP** `^8.3` — the CI matrix tests 8.3 and 8.4; the constraint allows 8.5, which is not tested yet
+- **Laravel** `^12.0 || ^13.0` — the `illuminate/*` components, not the framework package
 - A database driver Eloquent supports; the test suite runs on SQLite, and the `LIKE` escaping is
   written to behave identically on MySQL/MariaDB, PostgreSQL and SQLite
+- On the browser side, an Aura that reads **contract 1.0** — see [Versioning](#versioning), which is
+  the version number that actually decides compatibility
 
 ---
 
@@ -1531,6 +1539,74 @@ Nothing carries the version over the wire today. The response schema sets
 
 ---
 
+## Versioning
+
+Three version numbers meet here, and they move independently:
+
+| Number | What it counts | Today |
+| --- | --- | --- |
+| `tamas-labs/laravel-aura` | this package — semver, taken from the git tag | unreleased (`dev-main`) |
+| `AuraContract::VERSION` | the wire contract it writes | **1.0** |
+| `@tamas-labs/aura` | the Vue table that reads that contract | **1.0** |
+
+**Compatibility is decided by the middle row, not by the other two.** Any Aura release that reads
+contract 1.0 works with any release of this package that writes it, whatever their own version
+numbers say — that is the point of publishing the schema separately, in
+[`tamas-labs/aura-schema`](https://github.com/tamas-labs/aura-schema), instead of each side
+carrying a copy. So the question this section has to answer is not "which Aura version?" but
+"which contract version?", and the answer is the constant.
+
+### What semver covers
+
+**The public surface is two surfaces.** One is the PHP you call; the other is the JSON that
+reaches the browser. A change that leaves every call in your table class identical and alters what
+the browser draws is a breaking change all the same — the payload *is* the output of this package,
+and the definition is often cached, so a host application cannot even see it happen.
+
+| Change | Kind |
+| --- | --- |
+| A new builder method, a new `Condition`, a new preset | minor |
+| A new inference rule filling a gap that was empty before | minor — with `->withoutInference()` as the opt-out |
+| A key added to an emitted configuration that the renderer ignores | minor |
+| The same definition emitting a differently shaped `columnConfigs`, header cell or whitelist | **major** |
+| Renaming, removing, or narrowing the parameters of a documented method | **major** |
+| A method marked `@internal` changing shape or disappearing | not a version event at all |
+| Adding a PHP or a Laravel version to the matrix | minor |
+| Dropping one | **major** |
+
+The `@internal` line is not a matter of intent: `tests/DocsCoverageTest.php` reflects over `src/`
+and fails when a method is neither documented in both full references nor marked `@internal`, so
+the two lists are the same list. Everything documented here is covered; nothing else is. See
+[Development](#development).
+
+### What the contract's own version covers
+
+The response schema sets `additionalProperties: true`, so **the browser tolerates keys it does not
+know** — a payload may grow within contract 1.0 without breaking a reader. The request schema sets
+`additionalProperties: false`, so the opposite holds on the way in: anything this package invents
+on the request side is a contract change, not an extension.
+
+A move to contract 2.0 would be a **major** version of this package, because the payload it writes
+would no longer be one an Aura reading 1.0 can render.
+
+Nothing carries the version over the wire today. A host application that wants to assert the pair
+has `AuraContract::VERSION` to compare against; there is deliberately no negotiation, no header,
+and no field in the payload.
+
+### Before the tag
+
+Two things are true of `dev-main` that will not be true of a release, and they are worth stating
+rather than discovering:
+
+- **`tamas-labs/aura-schema` is pulled at `dev-main`, and `composer.lock` is not committed** (the
+  library convention). Nothing fixes the upstream revision, so a schema change can turn CI here red
+  with no commit in this repository, and an old CI run cannot be replayed. A git tag on
+  `aura-schema` — a VCS repository resolves tags into semver versions, no registry needed — turns
+  that constraint into `^1.0`. It is a release blocker, not a footnote.
+- **The package is not on Packagist**, so `composer require tamas-labs/laravel-aura:dev-main` over a
+  `repositories` entry is the only way to install it, and `dev-main` means "whatever `main` says
+  today" — including a breaking change made an hour ago.
+
 ## Validating your own payloads
 
 This package validates its own output against the schema in its test suite, with no network
@@ -1637,7 +1713,8 @@ package's autoload.
 | **F6.1** | Demo workbench app | ✅ done |
 | **F6.2** | `make:aura-table` | ✅ done |
 | **F6.3** | Documentation-coverage guard, and the `@internal` line under the version promise | ✅ done |
-| **F6.4–6.5** | Contract versioning, release | planned |
+| **F6.4** | Versioning and the binding to the contract version | ✅ done |
+| **F6.5** | The Packagist release | planned |
 
 ---
 

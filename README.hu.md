@@ -55,6 +55,10 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [AuraPayload](#aurapayload)
 - [Kivételek](#kivételek)
 - [A dróton lévő szerződés](#a-dróton-lévő-szerződés)
+- [Verziózás](#verziózás)
+  - [Mit fed a semver](#mit-fed-a-semver)
+  - [Mit fed a szerződés saját verziója](#mit-fed-a-szerződés-saját-verziója)
+  - [A tag előtt](#a-tag-előtt)
 - [A saját payloadod validálása](#a-saját-payloadod-validálása)
 - [Fejlesztés](#fejlesztés)
   - [A demo-alkalmazás](#a-demo-alkalmazas)
@@ -65,15 +69,16 @@ származnak — így nem tudnak elcsúszni egymástól.
 
 ## Állapot
 
-A csomag a tervének **F6.3** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
+A csomag a tervének **F6.4** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
 kérést, a cellái többet renderelnek szövegnél, a négy resource-akció egyetlen hívás — testreszabva
 is —, egy cella az egyik sornak felkínálható, a másiknak nem, a `make:aura-table` megírja az első
-vázlatot, a referencia-dokumentációt pedig már nem a fegyelem tartja, hanem egy teszt.
+vázlatot, a referencia-dokumentációt — és alatta a verzió-ígéretet — pedig már nem a fegyelem
+tartja, hanem egy teszt.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| `AuraTable` — táblánként egy osztály, `respond($request)` | A szerződés-verzió kimondása (F6.4) |
-| Oszlopok, csoportok, footer, tábla-beállítások | A Packagist-kiadás (F6.5) |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | A Packagist-kiadás (F6.5) |
+| Oszlopok, csoportok, footer, tábla-beállítások | |
 | Oszlop-defaultok a modell castjaiból | |
 | A mező-whitelist, az oszlopokból származtatva | |
 | Rendezés, keresés, szűrés, globális keresés | |
@@ -86,8 +91,9 @@ vázlatot, a referencia-dokumentációt pedig már nem a fegyelem tartja, hanem 
 | `make:aura-table`, a modell táblájából felskiccelve | |
 | Futtatható demo-alkalmazás (`composer serve`) | |
 | Dokumentáció-lefedettségi őr mindkét referencia felett | |
+| Kimondott és teszttel őrzött verzió-ígéret | |
 
-Ami hátravan, az maga a kiadás: a szerződés-verzió kimondása és a tag.
+Ami hátravan, az maga a kiadás: a tag.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -95,11 +101,13 @@ A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telep�
 
 ## Követelmények
 
-- **PHP** 8.3 vagy 8.4
-- **Laravel** 12 vagy 13 (`illuminate/support`, `illuminate/contracts`)
+- **PHP** `^8.3` — a CI-mátrix 8.3-at és 8.4-et futtat; a constraint a 8.5-öt is engedi, az még nincs tesztelve
+- **Laravel** `^12.0 || ^13.0` — az `illuminate/*` komponensek, nem a framework-csomag
 - Bármilyen Eloquent által támogatott adatbázis-driver; a teszt-suite SQLite-on fut, a `LIKE`
   escape-elés pedig úgy van megírva, hogy MySQL/MariaDB-n, PostgreSQL-en és SQLite-on egyformán
   viselkedjen
+- A böngésző oldalán olyan Aura, ami az **1.0 szerződést** olvassa — lásd a
+  [Verziózás](#verziózás) szakaszt, mert valójában ez a verziószám dönti el a kompatibilitást
 
 ---
 
@@ -1553,6 +1561,74 @@ verziómező később törésmentesen hozzáadható.
 
 ---
 
+## Verziózás
+
+Három verziószám találkozik itt, és egymástól függetlenül mozognak:
+
+| Szám | Mit számol | Ma |
+| --- | --- | --- |
+| `tamas-labs/laravel-aura` | ez a csomag — semver, a git tagből | kiadatlan (`dev-main`) |
+| `AuraContract::VERSION` | a szerződés, amit ír | **1.0** |
+| `@tamas-labs/aura` | a Vue-tábla, ami ezt a szerződést olvassa | **1.0** |
+
+**A kompatibilitást a középső sor dönti el, nem a másik kettő.** Bármelyik Aura-kiadás, ami az 1.0
+szerződést olvassa, együtt működik ennek a csomagnak bármelyik olyan kiadásával, ami azt írja —
+függetlenül attól, mit mond a két csomagverzió. Pont ezért él a séma külön csomagban, a
+[`tamas-labs/aura-schema`](https://github.com/tamas-labs/aura-schema)-ban, ahelyett hogy mindkét
+oldal a saját másolatát hordozná. A kérdés tehát nem az, hogy „melyik Aura-verzió", hanem az, hogy
+„melyik szerződés-verzió" — és arra a konstans válaszol.
+
+### Mit fed a semver
+
+**A publikus felület két felület.** Az egyik a PHP, amit hívsz; a másik a JSON, ami a böngészőbe
+ér. Az a változás, ami a tábla-osztályodban minden hívást változatlanul hagy, de mást rajzoltat a
+böngészővel, ugyanúgy törő változás — a payload **ez a csomag kimenete**, és a definíció ráadásul
+gyakran cache-elt, tehát a gazdaalkalmazás észre sem venné.
+
+| Változás | Milyen |
+| --- | --- |
+| Új builder-metódus, új `Condition`, új preset | minor |
+| Új következtetési szabály, ami eddig üres helyet tölt ki | minor — a kimaradás a `->withoutInference()` |
+| Új kulcs egy kiadott konfigurációban, amit a renderelő figyelmen kívül hagy | minor |
+| Ugyanaz a definíció más alakú `columnConfigs`-ot, header-cellát vagy whitelistet ad | **major** |
+| Dokumentált metódus átnevezése, törlése vagy a paramétereinek szűkítése | **major** |
+| `@internal`-nak jelölt metódus alakváltása vagy eltűnése | egyáltalán nem verzió-esemény |
+| Új PHP- vagy Laravel-verzió a mátrixba | minor |
+| Egy meglévő elhagyása | **major** |
+
+Az `@internal` határ nem szándék kérdése: a `tests/DocsCoverageTest.php` reflexióval végigmegy a
+`src/`-en, és elbukik, ha egy metódus se nincs benne mindkét teljes referenciában, se nincs
+`@internal`-nak jelölve — a két lista tehát ugyanaz a lista. Amit itt dokumentálunk, azt fedi a
+verzió-ígéret; mást nem. Lásd a [Fejlesztés](#fejlesztés) szakaszt.
+
+### Mit fed a szerződés saját verziója
+
+A válasz-séma `additionalProperties: true`, tehát **a böngésző elviseli az általa nem ismert
+kulcsokat** — egy payload az 1.0 szerződésen belül bővülhet anélkül, hogy bármelyik olvasója
+eltörne. A kérés-séma viszont `additionalProperties: false`, tehát befelé az ellenkezője igaz:
+amit ez a csomag a kérés-oldalon kitalálna, az szerződésváltozás, nem bővítés.
+
+A 2.0 szerződésre lépés ennek a csomagnak **major** verziója lenne, mert a payload, amit ír, már nem
+olyan, amit egy 1.0-t olvasó Aura renderelni tud.
+
+A verziót ma semmi nem viszi át a dróton. Annak a gazdaalkalmazásnak, ami állítást akar tenni a
+párosításról, ott az `AuraContract::VERSION` konstans; egyeztetés, fejléc és payload-mező
+szándékosan nincs.
+
+### A tag előtt
+
+Két dolog igaz a `dev-main`-re, ami egy kiadásra már nem lesz — és jobb kimondani, mint felfedezni:
+
+- **A `tamas-labs/aura-schema` `dev-main`-en jön, a `composer.lock` pedig nincs commitolva** (ez a
+  könyvtár-konvenció). Semmi nem rögzíti a felsőbb revíziót, tehát egy séma-változás úgy tudja
+  pirosra fordítani az itteni CI-t, hogy ebben a repóban egyetlen commit sem történt, egy régi
+  CI-futás pedig nem játszható újra. Egy git tag az `aura-schema`-n ezt `^1.0`-vá teszi — egy VCS
+  repository a tageket semver-verziókká oldja fel, registry nélkül. Ez kiadási blokkoló, nem
+  lábjegyzet.
+- **A csomag nincs fenn Packagiston**, tehát a `composer require tamas-labs/laravel-aura:dev-main`
+  egy `repositories` bejegyzés mellett az egyetlen telepítési mód — a `dev-main` pedig azt jelenti:
+  „amit a `main` ma mond", beleértve egy egy órája bekerült törő változást is.
+
 ## A saját payloadod validálása
 
 Ez a csomag a saját kimenetét a teszt-suite-jában validálja a sémára, hálózati elérés nélkül: az
@@ -1660,7 +1736,8 @@ nincs benne a csomag autoloadjában.
 | **F6.1** | Demo workbench-app | ✅ kész |
 | **F6.2** | `make:aura-table` | ✅ kész |
 | **F6.3** | Dokumentáció-lefedettségi őr, és az `@internal` határ a verzió-ígéret alatt | ✅ kész |
-| **F6.4–6.5** | Szerződés-verziózás, kiadás | tervezett |
+| **F6.4** | Verziózás és a szerződés-verzióhoz kötés | ✅ kész |
+| **F6.5** | A Packagist-kiadás | tervezett |
 
 ---
 

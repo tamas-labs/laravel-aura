@@ -8,6 +8,31 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **Kimondott verzió-ígéret (F6.4).** Új *Verziózás* / *Versioning* szakasz mindkét teljes
+  referenciában, plusz a `tests/VersioningTest.php` őr, ami a szöveget a kódhoz köti.
+    - **Három verziószám találkozik itt, és a kompatibilitást a középső dönti el**: a csomagé
+      (semver, a git tagből), az `AuraContract::VERSION` (**1.0**), és a `@tamas-labs/aura` Vue-táblájáé
+      (**1.0**). Bármelyik Aura, ami az 1.0 szerződést olvassa, együtt működik bármelyik kiadással,
+      ami azt írja — ezért él a séma külön csomagban.
+    - **A publikus felület két felület**: a hívható PHP *és* a böngészőbe érő JSON. Az a változás,
+      ami minden hívást változatlanul hagy, de más `columnConfigs`-ot, header-cellát vagy whitelistet
+      ad ugyanarra a definícióra, **major** — a payload ennek a csomagnak a kimenete, és a definíció
+      ráadásul cache-elt. Táblázat mondja meg, mi minor és mi major; az `@internal` metódus
+      egyáltalán nem verzió-esemény.
+    - **A szerződés saját aszimmetriája is ki van mondva**: a válasz-séma `additionalProperties: true`
+      (a payload bővülhet 1.0-n belül), a kérés-séma `additionalProperties: false` (amit a kérés-oldalon
+      kitalálnánk, az szerződésváltozás). A 2.0 szerződésre lépés a csomag major verziója lenne.
+    - **A `dev-main` két következménye a tag előtt**: az `aura-schema` rögzítetlen (kiadási blokkoló,
+      nem lábjegyzet), és a `dev-main`-ről telepítés azt jelenti, „amit a `main` ma mond".
+    - **Az őr öt dolgot rögzít**: a két README ugyanazt a szerződés-verziót állítja, mint a konstans;
+      mindkettő szó szerint idézi a `composer.json` PHP- és Laravel-constraintjét; minden Illuminate-
+      komponens ugyanazt a constraintet viszi (különben a „Laravel `^12.0 || ^13.0`" egyes számban
+      hazudna); a manifest nem tartalmaz `version` kulcsot (a tag a verzió); és mindkét referencia
+      megnevezi a Vue-csomagot a szerződés túlsó végén.
+    - A követelmény-listák mostantól a **tényleges constraintet** írják (`^8.3`, `^12.0 || ^13.0`),
+      nem a tesztelt verziókat — így az is látszik, hogy a `^8.3` a 8.5-öt is engedi, amit a mátrix
+      még nem futtat.
+
 - **Dokumentáció-lefedettségi őr (F6.3).** A `tests/DocsCoverageTest.php` reflexióval végigmegy a
   `src/` minden osztályán, és elbukik, ha egy publikus metódus egyik teljes referenciában sem
   szerepel — vagy ha csak az egyikben, mert a két nyelv így csúszik szét. A kiadás előtti audit
