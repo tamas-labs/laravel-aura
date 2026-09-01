@@ -20,6 +20,7 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [Configuration](#configuration)
   - [`limits` — the rest of the payload](#limits--the-rest-of-the-payload)
 - [Defining a table](#defining-a-table)
+  - [Generating one](#generating-one)
 - [Columns](#columns)
 - [Inference](#inference)
 - [Enums](#enums)
@@ -62,14 +63,14 @@ fields the query will accept come out of the same definition, so they cannot dri
 
 ## Status
 
-The package is at **F5c** of its plan: a table is a class, it serves a request end to end, its
-cells render as more than text, the four resource actions are one call — customised or not — and a
-cell can be offered to some rows and not others.
+The package is at **F6.2** of its plan: a table is a class, it serves a request end to end, its
+cells render as more than text, the four resource actions are one call — customised or not — a
+cell can be offered to some rows and not others, and `make:aura-table` writes the first draft.
 
 | Works today | Not built yet |
 | --- | --- |
-| `AuraTable` — one class per table, `respond($request)` | `make:aura-table` and the demo app (F6) |
-| Columns, groups, footers, table settings | |
+| `AuraTable` — one class per table, `respond($request)` | A documentation-coverage guard (F6.3) |
+| Columns, groups, footers, table settings | The Packagist release (F6.4, F6.5) |
 | Column defaults inferred from the model's casts | |
 | The field whitelist, derived from the columns | |
 | Sorting, searching, filtering, global search | |
@@ -79,8 +80,11 @@ cell can be offered to some rows and not others.
 | Routes from `$resource`, from a named route, or spelled out | |
 | Per-row permissions — `allowedWhen()`, batched or not | |
 | A cacheable, request-independent definition | |
+| `make:aura-table`, scaffolded from the model's table | |
+| A runnable demo app (`composer serve`) | |
 
-What is left is developer experience: a generator, a demo app, and the release.
+What is left is the release itself: a documentation guard, the contract-version promise, and the
+tag.
 
 The package is **not released**: no tag, not on Packagist. Install it from the repository.
 
@@ -227,6 +231,38 @@ That is the whole endpoint. Aura fetches with `POST` by default, so route it acc
 
 `query()` is where constraints that are always true belong — tenant scoping, eager loads, a
 `withTrashed()`. Everything the user chooses is applied on top of it.
+
+<a id="generating-one"></a>
+### Generating one
+
+```bash
+php artisan make:aura-table UserTable --model=User
+```
+
+It writes `app/Tables/UserTable.php`, scaffolded from the model's **own database table**: one
+`Column::make()` per column, with the flags its type and cast justify.
+
+| What it finds | What it writes |
+| --- | --- |
+| a `BackedEnum` cast, or a boolean | `->filterable()` — the cast fills the dropdown's `elements` at build time |
+| anything else readable — text, numbers, dates | `->sortable()->searchable()`; `currency`, the alignment and the range input arrive from the cast when the definition is built |
+| the primary key | nothing — the selection and action columns already read it |
+| a `*_id` foreign key | a comment pointing at `Column::make('company.name')`, which renders the related row and sorts it with a subquery |
+| a `json` / `blob` column, or anything in the model's `$hidden` | a comment, or nothing |
+
+Two lines are there because every table needs them and one of them is a trap:
+`Column::selection()->key('select')` and `Column::actions('id', …)`. Both default to the model's
+key, and the action column is the one that cannot move — its key *is* the route placeholder — so
+the generator re-keys the selection column, which is free (Aura reads the row id from that column's
+`field`).
+
+**It is a first draft, and it declines to guess anything editorial.** Nothing is put in the global
+search, nothing is given a cell renderer, and no `$resource` is set; the generated class docblock
+says so. Without a reachable database it writes a placeholder and tells you.
+
+`--model` is optional — the model is guessed from the class name the way `make:policy` guesses,
+minus a trailing `Table`. A model outside the application namespace is taken as it stands. Drop a
+`stubs/aura-table.stub` in the project root to replace the template.
 
 ### Why one class rather than a chain in the controller
 
@@ -1379,7 +1415,9 @@ package's autoload.
 | **F5a** | Actions in convention mode: `Action`, `Column::actions()` | ✅ done |
 | **F5b** | Escalation to an explicit `columnConfig`, and route building | ✅ done |
 | **F5c** | Per-row permissions — the response side | ✅ done |
-| **F6** | Demo workbench app, `make:aura-table`, release | planned |
+| **F6.1** | Demo workbench app | ✅ done |
+| **F6.2** | `make:aura-table` | ✅ done |
+| **F6.3–6.5** | Documentation guard, contract versioning, release | planned |
 
 ---
 

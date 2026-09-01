@@ -21,6 +21,7 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [Konfiguráció](#konfiguráció)
   - [`limits` — a payload többi része](#limits--a-payload-többi-része)
 - [Egy tábla definiálása](#egy-tábla-definiálása)
+  - [Generálás](#generalas)
 - [Oszlopok](#oszlopok)
 - [Következtetés a modellből](#következtetés-a-modellből)
 - [Enumok](#enumok)
@@ -63,14 +64,15 @@ származnak — így nem tudnak elcsúszni egymástól.
 
 ## Állapot
 
-A csomag a tervének **F5c** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
+A csomag a tervének **F6.2** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
 kérést, a cellái többet renderelnek szövegnél, a négy resource-akció egyetlen hívás — testreszabva
-is —, és egy cella az egyik sornak felkínálható, a másiknak nem.
+is —, egy cella az egyik sornak felkínálható, a másiknak nem, és a `make:aura-table` megírja az
+első vázlatot.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| `AuraTable` — táblánként egy osztály, `respond($request)` | `make:aura-table` és a demo-app (F6) |
-| Oszlopok, csoportok, footer, tábla-beállítások | |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | Dokumentáció-lefedettségi őr (F6.3) |
+| Oszlopok, csoportok, footer, tábla-beállítások | A Packagist-kiadás (F6.4, F6.5) |
 | Oszlop-defaultok a modell castjaiból | |
 | A mező-whitelist, az oszlopokból származtatva | |
 | Rendezés, keresés, szűrés, globális keresés | |
@@ -80,8 +82,10 @@ is —, és egy cella az egyik sornak felkínálható, a másiknak nem.
 | Route a `$resource`-ból, nevesített route-ból vagy kiírva | |
 | Soronkénti jogosultság — `allowedWhen()`, kötegelve vagy sem | |
 | Cache-elhető, kérésfüggetlen definíció | |
+| `make:aura-table`, a modell táblájából felskiccelve | |
+| Futtatható demo-alkalmazás (`composer serve`) | |
 
-Ami hátravan, az a fejlesztői élmény: egy generátor, egy demo-app és a kiadás.
+Ami hátravan, az maga a kiadás: egy dokumentációs őr, a szerződés-verzió kimondása és a tag.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -229,6 +233,38 @@ Ennyi a végpont. Az Aura alapértelmezésben `POST`-tal kér, ezért így vedd 
 
 A `query()`-be azok a megszorítások valók, amik mindig igazak — tenant-szűkítés, eager load, egy
 `withTrashed()`. Amit a felhasználó választ, arra épül rá.
+
+<a id="generalas"></a>
+### Generálás
+
+```bash
+php artisan make:aura-table UserTable --model=User
+```
+
+Kiírja az `app/Tables/UserTable.php`-t, a modell **saját adatbázistáblájából** felskiccelve:
+oszloponként egy `Column::make()`, azokkal a flagekkel, amiket a típusa és a castja indokol.
+
+| Amit talál | Amit ír |
+| --- | --- |
+| `BackedEnum` cast vagy boolean | `->filterable()` — a legördülő `elements`-ét a cast tölti fel build-időben |
+| minden más olvasható: szöveg, szám, dátum | `->sortable()->searchable()`; a `currency`, az igazítás és a tartomány-beviteli mező a castból érkezik, amikor a definíció felépül |
+| az elsődleges kulcsot | semmit — a kijelölő és az action-oszlop már olvassa |
+| `*_id` idegen kulcsot | kommentet, ami a `Column::make('company.name')`-re mutat: az a kapcsolt sort rendereli, és alkérdéssel rendezi |
+| `json` / `blob` oszlopot, vagy amit a modell `$hidden`-je rejt | kommentet, vagy semmit |
+
+Két sor azért van benne, mert minden táblának kell, és az egyik csapda:
+`Column::selection()->key('select')` és `Column::actions('id', …)`. Mindkettő alapból a modell
+kulcsát venné, és az action-oszlop az, amelyik nem mozdulhat — a kulcsa *maga* a
+route-placeholder —, ezért a generátor a kijelölő oszlopot kulcsolja át, ami ingyen van: az Aura a
+sor azonosítóját annak az oszlopnak a `field`-jéből olvassa.
+
+**Ez első vázlat, és semmi szerkesztői döntést nem talál ki.** Semmi nem kerül a globális
+keresésbe, egyik oszlop sem kap cella-renderelőt, és `$resource` sem íródik ki; a generált osztály
+docblockja ki is mondja. Elérhetetlen adatbázis esetén helyőrzőt ír, és szól róla.
+
+A `--model` elhagyható — a modellt az osztálynévből találja ki, ahogy a `make:policy` teszi, a
+záró `Table` levágásával. Az alkalmazás névterén kívüli modellt úgy veszi, ahogy megadtad. A
+projekt gyökerébe tett `stubs/aura-table.stub` felülírja a sablont.
 
 ### Miért osztály, és nem egy hívásfüzér a controllerben
 
@@ -1401,7 +1437,9 @@ nincs benne a csomag autoloadjában.
 | **F5a** | Akciók konvenció-módban: `Action`, `Column::actions()` | ✅ kész |
 | **F5b** | Eszkaláció explicit `columnConfig`-ra, és route-építés | ✅ kész |
 | **F5c** | Soronkénti jogosultság — a válasz-oldal | ✅ kész |
-| **F6** | Demo workbench-app, `make:aura-table`, kiadás | tervezett |
+| **F6.1** | Demo workbench-app | ✅ kész |
+| **F6.2** | `make:aura-table` | ✅ kész |
+| **F6.3–6.5** | Dokumentációs őr, szerződés-verziózás, kiadás | tervezett |
 
 ---
 

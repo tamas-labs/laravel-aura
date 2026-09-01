@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Illuminate\Database\Eloquent\Builder;
+use TamasLabs\Aura\Table\Action;
+use TamasLabs\Aura\Table\AuraTable;
+use TamasLabs\Aura\Table\Column;
+{{ modelImport }}
+/**
+ * Scaffolded from the {{ modelBasename }} table. Every line below is a first draft:
+ * delete what this table does not need, and reorder what it does.
+ *
+ * Worth adding by hand, because a generator cannot choose them for you:
+ *
+ * - `->globalSearch()` on the one or two fields the toolbar's search should
+ *   cover. Nothing is in it until something says so.
+ * - `->as(...)` on the columns that render as more than text — a badge, a link,
+ *   a progress bar. See the cell types in the README.
+ * - `protected ?string $resource` when an action is customised. In convention
+ *   mode the browser builds the route from its own configuration.
+ *
+ * @extends AuraTable<{{ modelBasename }}>
+ */
+final class {{ class }} extends AuraTable
+{
+    /**
+     * Constraints that are always true — scoping to a tenant, eager loads —
+     * belong here.
+     *
+     * @return Builder<{{ modelBasename }}>
+     */
+    public function query(): Builder
+    {
+        return {{ modelBasename }}::query();
+    }
+
+    /**
+     * The columns, left to right.
+     *
+     * @return list<Column>
+     */
+    public function columns(): array
+    {
+        return [
+{{ columns }}
+        ];
+    }
+}

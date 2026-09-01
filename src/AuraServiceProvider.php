@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace TamasLabs\Aura;
 
 use Illuminate\Support\ServiceProvider;
+use TamasLabs\Aura\Console\AuraTableMakeCommand;
 
 /**
- * Registers the package's configuration and, later, its Artisan commands.
+ * Registers the package's configuration and its Artisan commands.
  */
 final class AuraServiceProvider extends ServiceProvider
 {
@@ -21,7 +22,8 @@ final class AuraServiceProvider extends ServiceProvider
     }
 
     /**
-     * Expose the config file to `php artisan vendor:publish --tag=aura-config`.
+     * Expose the config file to `php artisan vendor:publish --tag=aura-config`,
+     * and register `make:aura-table`.
      */
     public function boot(): void
     {
@@ -29,6 +31,8 @@ final class AuraServiceProvider extends ServiceProvider
             $this->publishes([
                 $this->configPath() => $this->app->configPath('aura.php'),
             ], 'aura-config');
+
+            $this->commands([AuraTableMakeCommand::class]);
         }
     }
 

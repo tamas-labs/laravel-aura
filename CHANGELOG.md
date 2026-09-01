@@ -8,6 +8,37 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **`make:aura-table` (F6.2).** `php artisan make:aura-table UserTable --model=User` — a modell
+  **saját adatbázistáblájából** skicceli fel az osztályt, nem property-nevekből találgatva: egy
+  `Column::make()` oszloponként, azzal a flaggel, amit a típusa és a castja indokol.
+    - `BackedEnum` cast vagy boolean → `->filterable()`; minden más olvasható típus →
+      `->sortable()->searchable()`. A `currency`, az igazítás és a tartomány-beviteli mező a
+      castból érkezik build-időben, tehát a generátor nem ismétli meg őket.
+    - **Az elsődleges kulcs kimarad, az idegen kulcs kommentet kap** (`Column::make('company.name')`),
+      a `json` / `blob` és a modell `$hidden`-je szintén. A generátor ott hagy kommentet, ahol nem
+      volt hajlandó dönteni.
+    - **A kijelölő oszlop `key('select')`-tel generálódik.** A kijelölés és az action-oszlop kulcsa
+      is a modell kulcsára esne, és az action-oszlopé nem mozdulhat — a kulcsa maga a
+      route-placeholder. Az átkulcsolás ingyen van: az Aura a sor azonosítóját a `field`-ből olvassa.
+    - **Semmi szerkesztői döntést nem talál ki**: nincs `globalSearch()`, nincs `->as(…)`, nincs
+      `$resource` — a generált docblock ki is mondja, mit érdemes kézzel hozzátenni. Elérhetetlen
+      adatbázisnál helyőrzőt ír, és figyelmeztet.
+    - A `--model` elhagyható (az osztálynévből következtet, mint a `make:policy`), az alkalmazás
+      névterén kívüli modellt úgy veszi, ahogy megadtad, és a `stubs/aura-table.stub` felülírja a
+      sablont.
+    - **Hibás `--model` esetén nem nulla a kilépési kód.** A Laravel `(int)`-tel castolja a
+      parancs visszatérési értékét, tehát a generátorok `false`-a **0**-val lép ki — egy szkript
+      nem tudná megkülönböztetni az elgépelt modellt a megírt fájltól.
+
+### Változott
+
+- **A `composer.json` mostantól megnevezi az összes Illuminate-komponenst, amit a `src/` használ**:
+  az `illuminate/database`, az `illuminate/http` és az `illuminate/validation` eddig hiányzott a
+  `require`-ből, pedig a csomag Eloquentet, `Request`-et és `ValidationException`-t is használ; az
+  `illuminate/console` most kerül be a parancs miatt. Laravel-alkalmazásban ez nem változtat semmin
+  (a `laravel/framework` mindegyiket hozza), egy komponens-alapú telepítésnél viszont eddig hiányos
+  volt a függőséglista.
+
 - **Demo-alkalmazás (F6.1).** A `workbench/` egy Testbench-workbench: egy modell, egy tábla-osztály,
   egy route — `composer serve`, és a `v1.0/`-ban futó Aura dev-szerver a
   `http://localhost:8000/api/employees` címre mutathat. Ez az az egy kérdés, amit a teszt-suite nem
