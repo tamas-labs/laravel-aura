@@ -8,6 +8,38 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **Soronkénti jogosultság (F5c).** `allowedWhen()` az akción vagy bármelyik cella-konfiguráción:
+  amelyik sort a callback elutasítja, ott a cella nincs ott. A callback a sor **modelljét** kapja.
+    - **A kapu körbeveszi a konfigurációt, nem mellé áll.** A gyökér a `type`, a rejtett flag mint
+      `key`, és egyetlen `if` ág, **`else` nélkül** — az Aura pontosan ilyenkor renderel semmit
+      (INV3, `resolve-conditional-config.ts:94`). Minden más, a hívó saját `when()` / `otherwise()`
+      hívásaival együtt, az ágon belülre kerül. Egy konfigurációnak egy feltétel-mezője van, tehát
+      egy azonos szinten álló kapu ugyanazt a mezőt olvasná, mint a saját feltételeid, egy alatta
+      lévő `otherwise()` pedig pont az elutasított soroknak renderelné a cellát. Kívülről nem
+      megkerülhető — ezért nem tiltjuk a kettőt egymás mellett, ahogy a terv F5c.3 eredetileg
+      kilátásba helyezte.
+    - **A flag minden sorban ott van, a `false` is**, és **valódi `bool`** (INV4): az Aura `true`
+      operátora egzakt (`fieldValue === true`), tehát egy `tinyint` `1` vagy egy `"1"` minden sort
+      megtagadna. A hiányzó mező is rejt, tehát a leállt kapu és a „senkinek semmi nem szabad"
+      megkülönböztethetetlen lenne — ezért van mindig kiírva.
+    - **A route-placeholder az ágba kerül** (INV13/INV14): a gyökérben a `key` a feltétel-szelektor,
+      amit a `stripLogicProps` eltávolít, tehát a kapuzott ikon a gyökérben hagyott kulccsal link
+      nélkül renderelődne — némán. Ezt a meglévő ág-kulcsozás intézi, változtatás nélkül.
+    - **`allowedWhenAll()`** egyszer készíti elő a döntést az egész lapra (Eloquent-kollekciót kap,
+      a soronkénti tesztet adja vissza), a soronkénti forma pedig egy már memóriában lévő modellt
+      kap — egyik sem indít lekérdezést soronként; `DB::listen`-es teszt rögzíti.
+    - **A flag a mezőről kapja a nevét, a pontokat kilapítva** (`company.name` →
+      `_allowed_company_name`): a pontozott név az Aura `resolveValue`-jét beágyazott objektumban
+      kerestetné, és minden sort megtagadna. Két, egy flaget író kaput elutasítunk.
+    - **A kapuzott akció eszkalál**, mint bármelyik testreszabás — a generált konfiguráció nem
+      vinne feltételt. A `destroy` kapuja a modalra kerül, nem a benne lévő ikonra.
+    - **A cache-szel elcsúszni csak befelé lehet.** A cache a flag *nevét* tartja, a kitöltő closure
+      minden kérésnél frissen áll össze; ha a definíció olyan flaget nevez meg, amit már senki nem
+      tölt, a mező hiányzik, a hiányzó mező pedig nem `true` — a cella rejtve marad.
+    - A dokumentáció kimondja: **a rejtés nem jogosultság**. A sor, az azonosító és a route ott van
+      a payloadban; a megtagadásnak a route-on kell lennie, és az `allowedWhen()` ugyanazt a policy-t
+      kapja.
+
 - **Akció-eszkaláció és route-építés (F5b).** Bármilyen testreszabás — route, ikon, szín, felirat,
   tooltip, modal-id — hatására az akció maga adja ki a teljes `columnConfigs` bejegyzést, mert a
   generált konfiguráció nem vinné magával a testreszabást. A hívási felület nem változik, csak a

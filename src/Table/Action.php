@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace TamasLabs\Aura\Table;
 
+use Closure;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use TamasLabs\Aura\Cell\Button;
 use TamasLabs\Aura\Cell\CellConfig;
@@ -118,6 +121,13 @@ final class Action
 
     /** The modal an escalated `destroy` opens. */
     private string $modal = Modal::DESTROY;
+
+    /**
+     * The per-row gate this action's configuration is wrapped in.
+     *
+     * @var Closure(Collection<int, Model>): mixed|null
+     */
+    private ?Closure $permission = null;
 
     private bool $escalated = false;
 
@@ -314,6 +324,57 @@ final class Action
     }
 
     /**
+     * Offer this action only to the rows the callback allows.
+     *
+     * ```php
+     * Action::destroy()->allowedWhen(fn (User $user) => Gate::allows('delete', $user))
+     * ```
+     *
+     * It escalates like every other customisation, and for the same reason: a
+     * generated configuration carries no condition, so the server has to emit
+     * the whole entry to gate it. What it emits is a condition on a hidden
+     * per-row flag with no `else` beneath it — a denied row gets an empty cell.
+     *
+     * Give it the policy that protects the route the action points at. **The
+     * action is hidden, not forbidden**: the route is in the payload either
+     * way, and the check that refuses the request is the one on the route.
+     *
+     * @param  callable  $allowed  Given the row's model; anything truthy allows it.
+     */
+    public function allowedWhen(callable $allowed): self
+    {
+        return $this->allowedWhenAll(static fn (): callable => $allowed);
+    }
+
+    /**
+     * The same, prepared once for the whole page.
+     *
+     * The callback is given the page and returns the per-row test, so a check
+     * the rows cannot answer alone costs one query instead of one per row.
+     *
+     * @param  callable(Collection<int, Model>): mixed  $resolver
+     */
+    public function allowedWhenAll(callable $resolver): self
+    {
+        $this->permission = $resolver(...);
+        $this->escalated = true;
+
+        return $this;
+    }
+
+    /**
+     * The gate this action carries, for the response to resolve.
+     *
+     * @return Closure(Collection<int, Model>): mixed|null
+     *
+     * @internal
+     */
+    public function rowPermission(): ?Closure
+    {
+        return $this->permission;
+    }
+
+    /**
      * Any other key the trigger's configuration accepts — `size`, `target`,
      * `rounded`, a `data-*` attribute. The escape hatch, and it escalates like
      * every other customisation.
@@ -412,11 +473,16 @@ final class Action
         $route = $this->routeFor($columnKey, $resource);
         $trigger = $this->trigger();
 
-        if ($this->prefix !== 'destroy') {
-            return $trigger->route($route);
-        }
+        $config = $this->prefix === 'destroy'
+            ? Modal::make($this->modal)->route($route)->content($trigger)
+            : $trigger->route($route);
 
-        return Modal::make($this->modal)->route($route)->content($trigger);
+        // The gate goes on the outermost configuration: on a `destroy` that is
+        // the modal, so a denied row loses the trigger rather than keeping a
+        // glyph that opens nothing.
+        return $this->permission === null
+            ? $config
+            : $config->allowedWhenAll($this->permission);
     }
 
     /**

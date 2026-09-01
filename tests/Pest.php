@@ -93,8 +93,9 @@ function auraTable(
     ?TableSettings $settings = null,
     ?CellRules $rowRules = null,
     ?string $resource = null,
+    bool $cached = false,
 ): AuraTable {
-    return new InlineTable($columns, $footer, $settings, $rowRules, $resource);
+    return new InlineTable($columns, $footer, $settings, $rowRules, $resource, $cached);
 }
 
 /**

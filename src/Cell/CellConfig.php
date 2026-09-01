@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace TamasLabs\Aura\Cell;
 
+use Closure;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
+use TamasLabs\Aura\Response\RowPermissions;
 use TamasLabs\Aura\Table\Column;
 
 /**
@@ -49,6 +53,13 @@ abstract class CellConfig extends ConditionalBuilder
     ];
 
     protected ?CellRules $cellRules = null;
+
+    /**
+     * The per-row gate, given the page and returning the test for one row.
+     *
+     * @var Closure(Collection<int, Model>): mixed|null
+     */
+    private ?Closure $permission = null;
 
     /**
      * The `type` discriminator Aura dispatches on.
@@ -240,6 +251,74 @@ abstract class CellConfig extends ConditionalBuilder
     }
 
     /**
+     * Render this cell only for the rows the callback allows.
+     *
+     * The callback is handed the row's **model**, and its answer travels to the
+     * browser as a hidden flag the emitted configuration is conditioned on. A
+     * denied row renders an empty cell — Aura's own mechanism: no branch
+     * matched and there is no `else`.
+     *
+     * ```php
+     * Column::make('email')->as(
+     *     Link::make()->route('users/{id}')->allowedWhen(
+     *         fn (User $user) => Gate::allows('view', $user),
+     *     ),
+     * );
+     * ```
+     *
+     * Give it the policy the route is protected by, not a second rule that
+     * happens to agree today. **Hiding a cell is not authorisation**: the row,
+     * the identifier and the route are all still in the payload, and the check
+     * that matters is the one on the route.
+     *
+     * The gate wraps whatever the configuration already is, `when()` branches
+     * and all, so the two compose in the one direction that is safe — nothing
+     * inside can render for a row the gate denied.
+     *
+     * @param  callable  $allowed  Given the row's model; anything truthy allows it.
+     */
+    public function allowedWhen(callable $allowed): static
+    {
+        return $this->allowedWhenAll(static fn (): callable => $allowed);
+    }
+
+    /**
+     * The same, for a decision that has to be prepared for the whole page.
+     *
+     * The callback receives the page as a collection of models and returns the
+     * per-row test, so a lookup the rows cannot answer on their own costs one
+     * query for the page rather than one per row:
+     *
+     * ```php
+     * Action::destroy()->allowedWhenAll(function (Collection $rows) {
+     *     $locked = Lock::whereIn('post_id', $rows->modelKeys())->pluck('post_id')->flip();
+     *
+     *     return fn (Post $post) => ! $locked->has($post->getKey());
+     * });
+     * ```
+     *
+     * @param  callable(Collection<int, Model>): mixed  $resolver
+     */
+    public function allowedWhenAll(callable $resolver): static
+    {
+        $this->permission = $resolver(...);
+
+        return $this;
+    }
+
+    /**
+     * The gate this configuration carries, for the response to resolve.
+     *
+     * @return Closure(Collection<int, Model>): mixed|null
+     *
+     * @internal
+     */
+    public function rowPermission(): ?Closure
+    {
+        return $this->permission;
+    }
+
+    /**
      * Conditional styling of the `<td>` this content sits in.
      */
     public function rules(CellRules $rules): static
@@ -290,7 +369,7 @@ abstract class CellConfig extends ConditionalBuilder
             $resolved['cellRules'] = $config->cellRules->resolve($field);
         }
 
-        return $resolved;
+        return $config->permission === null ? $resolved : $config->gated($resolved, $field);
     }
 
     /**
@@ -309,6 +388,57 @@ abstract class CellConfig extends ConditionalBuilder
         }
 
         return array_values(array_unique($fields));
+    }
+
+    /**
+     * The finished configuration, behind its permission gate.
+     *
+     * The gate is a conditional configuration wrapped *around* the one that was
+     * resolved: the root carries the flag as its `key` and one `if` branch
+     * holding everything else, and deliberately no `else`. Aura merges the
+     * branch over the root when the flag is exactly `true`, recursing into it
+     * when the configuration was conditional in its own right, and returns
+     * `null` — an empty cell — when it is not.
+     *
+     * Wrapping rather than adding a branch to the configuration itself is what
+     * makes the two compose. A configuration has one condition field, so a gate
+     * sharing the level with the caller's own `when()` would have to evaluate
+     * both against the same field, and an `otherwise()` beneath it would render
+     * the cell for exactly the rows the gate denied. Outside, the gate cannot
+     * be reached past.
+     *
+     * Everything travels into the branch except `cellRules`, which is not part
+     * of the content: Aura reads it from `columnConfigs[column.key]` on its own
+     * and styles the `<td>` whether or not anything renders inside it.
+     *
+     * @param  array<string, mixed>  $resolved
+     * @return array<string, mixed>
+     *
+     * @throws InvalidDefinition When the gate would push the nesting past Aura's cap.
+     */
+    private function gated(array $resolved, string $field): array
+    {
+        $depth = $this->depth() + 1;
+
+        if ($depth > self::MAX_DEPTH) {
+            throw InvalidDefinition::conditionsTooDeep($depth, self::MAX_DEPTH);
+        }
+
+        $rules = $resolved['cellRules'] ?? null;
+
+        unset($resolved['type'], $resolved['cellRules']);
+
+        $gate = [
+            'type' => $this->type(),
+            'key' => RowPermissions::fieldFor($field),
+            'if' => [['true' => true] + $resolved],
+        ];
+
+        if ($rules !== null) {
+            $gate['cellRules'] = $rules;
+        }
+
+        return $gate;
     }
 
     /**

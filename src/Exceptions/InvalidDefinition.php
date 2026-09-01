@@ -498,6 +498,53 @@ final class InvalidDefinition extends LogicException implements AuraException
     }
 
     /**
+     * Two gated cells cannot share one flag: the second registration would
+     * overwrite the first, and both cells would then be decided by one of them.
+     */
+    public static function duplicatePermissionField(string $emitted, string $field): self
+    {
+        return new self(sprintf(
+            'Two permission gates both write the row field "%s" (the second one guards "%s"). '
+            .'The flag name is derived from the field the configuration is attached to, with dots '
+            .'replaced by underscores, so two fields that differ only in a dot collide. Rename one '
+            .'of the fields, or gate only one of the two cells.',
+            $emitted,
+            $field,
+        ));
+    }
+
+    /**
+     * `allowedWhen()` needs a field to name its flag after, and to attach the
+     * configuration to in the first place.
+     */
+    public static function permissionNeedsField(string $column): self
+    {
+        return new self(sprintf(
+            'The configuration on column %s is permission-gated, but the column names no field. '
+            .'The flag the gate reads is named after that field, and a configuration only reaches '
+            .'the browser under a field name at all. Give the column a field — Column::make(\'…\') '
+            .'— or gate the action instead.',
+            $column,
+        ));
+    }
+
+    /**
+     * `allowedWhenAll()` prepares once and decides per row; the preparation has
+     * to hand back the decision.
+     */
+    public static function permissionResolverShape(string $emitted, string $returned): self
+    {
+        return new self(sprintf(
+            'The allowedWhenAll() callback guarding "%s" returned %s, not a callable. It is given '
+            .'the page and has to return the per-row test: '
+            .'->allowedWhenAll(fn ($rows) => fn ($row) => …). Use allowedWhen() when there is '
+            .'nothing to prepare.',
+            $emitted,
+            $returned,
+        ));
+    }
+
+    /**
      * A column has to name its source, unless it is a grouping cell.
      */
     public static function missingField(?string $content): self

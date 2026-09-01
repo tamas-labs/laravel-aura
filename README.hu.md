@@ -37,6 +37,10 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [A kulcs placeholder, nem név](#a-kulcs-placeholder-nem-név)
   - [Eszkaláció](#eszkaláció)
   - [Route-ok](#action-route-ok)
+- [Soronkénti jogosultság](#soronkénti-jogosultság)
+  - [Hogyan megy ki](#hogyan-megy-ki)
+  - [Egy lekérdezés a lapra, nem soronként egy](#egy-lekérdezés-a-lapra-nem-soronként-egy)
+  - [Cache](#cache)
 - [Csoportos header](#csoportos-header)
 - [Footer és beállítások](#footer-és-beállítások)
 - [A definíció cache-elése](#a-definíció-cache-elése)
@@ -58,14 +62,14 @@ származnak — így nem tudnak elcsúszni egymástól.
 
 ## Állapot
 
-A csomag a tervének **F5b** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
-kérést, a cellái többet renderelnek szövegnél, és a négy resource-akció egyetlen hívás —
-testreszabva is.
+A csomag a tervének **F5c** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
+kérést, a cellái többet renderelnek szövegnél, a négy resource-akció egyetlen hívás — testreszabva
+is —, és egy cella az egyik sornak felkínálható, a másiknak nem.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| `AuraTable` — táblánként egy osztály, `respond($request)` | Soronkénti jogosultság (F5c) |
-| Oszlopok, csoportok, footer, tábla-beállítások | `make:aura-table` és a demo-app (F6) |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | `make:aura-table` és a demo-app (F6) |
+| Oszlopok, csoportok, footer, tábla-beállítások | |
 | Oszlop-defaultok a modell castjaiból | |
 | A mező-whitelist, az oszlopokból származtatva | |
 | Rendezés, keresés, szűrés, globális keresés | |
@@ -73,10 +77,10 @@ testreszabva is.
 | A kilenc cella-renderelő, feltételekkel és cella-szabályokkal | |
 | Action-oszlopok — konvenció-mód és eszkaláció teljes konfigurációra | |
 | Route a `$resource`-ból, nevesített route-ból vagy kiírva | |
+| Soronkénti jogosultság — `allowedWhen()`, kötegelve vagy sem | |
 | Cache-elhető, kérésfüggetlen definíció | |
 
-Ami még hiányzik, az a soronkénti fele: annak eldöntése, melyik sor kap egyáltalán linket — ez az
-F5c.
+Ami hátravan, az a fejlesztői élmény: egy generátor, egy demo-app és a kiadás.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -814,6 +818,119 @@ fel: valódi URL, hiányzó azonosítóval, és sehol egy hiba. A route-nevekhez
 
 ---
 
+## Soronkénti jogosultság
+
+Egyes sorok szerkeszthetők, mások nem. Az `allowedWhen()` mondja meg, melyik — az akción vagy a
+cella-konfiguráción —, és amelyik sort elutasítja, ott a cella egyszerűen nincs ott:
+
+```php
+use Illuminate\Support\Facades\Gate;
+
+Column::actions('id',
+    Action::show(),
+    Action::edit()->allowedWhen(fn (User $user) => Gate::allows('update', $user)),
+    Action::destroy()->allowedWhen(fn (User $user) => Gate::allows('delete', $user)),
+)
+```
+
+A callback a sor **modelljét** kapja, nem a tömböt, amivé az kilapul — egy policy az objektumot
+akarja. Bármi igaz értékű engedélyez.
+
+> **A cella elrejtése nem jogosultság.** A sor benne van a payloadban, az azonosító is, és a route
+> is ott van a `columnConfigs`-ban annak, aki elolvassa a választ. Ez attól óvja meg a táblát, hogy
+> olyan akciót kínáljon, amit a szerver aztán megtagadna; magának a megtagadásnak a route-on kell
+> lennie. Azt a policy-t add az `allowedWhen()`-nek, ami a route-ot védi — ne egy másodikat, ami ma
+> véletlenül egyetért vele.
+
+Ugyanez a hívás bármelyik cella-konfiguráción működik:
+
+```php
+Column::make('email')->as(
+    Link::make()->route('users/{id}')->allowedWhen(fn (User $user) => Gate::allows('view', $user)),
+)
+```
+
+### Hogyan megy ki
+
+Az Aura semmit nem renderel, ha egyik `if` ág sem illeszkedett és nincs `else`
+(`resolve-conditional-config.ts`). Ez maga a mechanizmus. A kapu egy rejtett, soronkénti flag, a
+konfiguráció pedig egyetlen feltétel fölötte:
+
+```json
+{
+  "type": "icon",
+  "key": "_allowed_edit_icon",
+  "if": [{ "true": true, "icon": "edit", "route": "admin/users/{id}/edit", "key": "id" }]
+}
+```
+
+a sorok pedig viszik a flaget:
+
+```json
+{ "id": 1, "last_name": "Lovelace", "_allowed_edit_icon": true }
+```
+
+Ennek a payloadnak négy tulajdonsága szándékos, és mindegyik egy-egy mód, ahogy ez különben némán
+elromolhatna:
+
+- **A flag minden sorban ott van, a `false` is.** A hiányzó mező `undefined`-ként olvasódik, a
+  definiálatlan flag pedig ugyanúgy elrejti a cellát, mint egy tiltás — egy leállt kapu tehát
+  pontosan úgy nézne ki, mint egy tábla, ahol senkinek semmi nem szabad. Így mindig ott van, hogy
+  ránézhess.
+- **Valódi `bool`.** Az Aura `true` operátora egzakt összehasonlítás (`fieldValue === true`), tehát
+  egy `tinyint` `1`, vagy a driver által visszaadott `"1"` minden sort megtagadna, egy szó nélkül.
+  Amit a callback visszaad, az castolódik.
+- **A kapu körbeveszi a konfigurációt, nem mellé áll.** Minden, amit a cella renderel, az ágon belül
+  van — a hívó saját `when()` / `otherwise()` hívásaival együtt. Egy konfigurációnak egy feltétel-
+  mezője van, tehát egy azonos szinten álló kapunak ugyanazt a mezőt kellene olvasnia, mint a saját
+  feltételeidnek, egy alatta lévő `otherwise()` pedig pont azoknak a soroknak renderelné a cellát,
+  amelyeket a kapu megtagadott. Kívülről nem lehet megkerülni — ezért nem tiltjuk a kettőt egymás
+  mellett.
+- **A `cellRules` a gyökérben marad.** Az nem tartalom: az Aura a `columnConfigs[column.key]` alól
+  olvassa, és a `<td>`-t attól függetlenül stílusozza, hogy renderelődik-e benne bármi.
+
+A flag arról a mezőről kapja a nevét, amit őriz, a pontokat kilapítva — a
+`Column::make('company.name')` a `_allowed_company_name`-re kapuz, mert egy pontozott név az Aura
+`resolveValue`-jét egy olyan `_allowed_company`-n belüli `name` keresésére küldené, amit egy sor sem
+visz. Két olyan kaput, ami egy flaget írna, elutasítunk — nem összeolvasztunk.
+
+A kapuzott akció **eszkalál**, mint bármelyik másik testreszabás: a generált konfiguráció nem visz
+feltételt, tehát a szervernek kell kiadnia az egész bejegyzést — ehhez pedig `$resource` kell, vagy
+route az akción. A mellette álló kapuzatlan akció továbbra sem kerül semmibe.
+
+### Egy lekérdezés a lapra, nem soronként egy
+
+Az `allowedWhen()` egy már memóriában lévő modellt kap, és semmibe nem kerül. Ha a döntéshez olyan
+keresés kell, amit a sorok maguktól nem tudnak megválaszolni, az `allowedWhenAll()` egyszer készíti
+elő az egész lapra, és a soronkénti tesztet adja vissza:
+
+```php
+use Illuminate\Database\Eloquent\Collection;
+
+Action::destroy()->allowedWhenAll(function (Collection $rows) {
+    $locked = Lock::whereIn('post_id', $rows->modelKeys())->pluck('post_id')->flip();
+
+    return fn (Post $post) => ! $locked->has($post->id);
+});
+```
+
+A kollekció a lap Eloquent-modellekként, tehát a `modelKeys()`, a `loadMissing()` és a többi ott
+van. A külső callback válaszonként egyszer fut; csak a belső fut soronként. Ha nem callable-t ad
+vissza, azt elutasítjuk.
+
+### Cache
+
+A kapu closure, a [cache-elt definíció](#a-definíció-cache-elése) pedig sima tömb. A cache a flag
+*nevét* tartja — a definícióba írt feltételként —; a callbacket, ami kitölti, minden kérésnél
+frissen szedjük össze, tehát a `$cache = true` és az `allowedWhen()` együtt működik.
+
+Elcsúszni csak egy irányba tudnak. Egy olyan cache-elt definíció, ami még megnevez egy flaget, amit
+már egyik oszlop sem tölt ki, olyan sorokat termel, amikben nincs az a mező — a hiányzó flag pedig
+nem `true`, tehát a cella rejtve marad. Az a kapu, aminek a flagjét már egy feltétel sem olvassa,
+egy olvasatlan mezőt tesz a sorba. Egyik sem fed fel semmit.
+
+---
+
 ## Csoportos header
 
 ```php
@@ -943,6 +1060,10 @@ hozzáér — ahelyett hogy a böngésző rosszat renderelne:
 | Abszolút vagy pontot tartalmazó `$resource` vagy action-route | az Aura maga teszi elé a `siteName`-et, és minden pontot perjelre cserél — az útvonal helyére írt route-név valódi URL-re oldódik fel, hiányzó azonosítóval |
 | `routeName()` nem regisztrált route-ra | az akció üres útvonalra mutatna |
 | `routeName()`, ami egynél több paramétert hagy nyitva | csak egy tölthető ki a sorból: amire az action-oszlop kulcsol |
+| Két jogosultsági kapu, ami egy flaget írna | a flag arról a mezőről kapja a nevét, amit őriz, tehát két, csak egy pontban különböző mező ütközik, és egy kapu döntene mindkét celláról |
+| `allowedWhen()` olyan oszlopon, ami nem nevez meg mezőt | a konfiguráció mezőnév alatt jut el a böngészőhöz, és a flag arról kapja a nevét |
+| `allowedWhenAll()`, ami nem callable-t ad vissza | a lapot kapja, és a soronkénti tesztet kell visszaadnia |
+| Kapu olyan feltételek fölé, amik már öt mélyek | a kapu a hatodik szint, az Aura pedig ötöt old fel |
 
 ---
 
@@ -1247,7 +1368,7 @@ külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 | **F4** | Cella-builderek: badge, link, button, icon, modal, progress, feltételes konfiguráció | ✅ kész |
 | **F5a** | Akciók konvenció-módban: `Action`, `Column::actions()` | ✅ kész |
 | **F5b** | Eszkaláció explicit `columnConfig`-ra, és route-építés | ✅ kész |
-| **F5c** | Soronkénti jogosultság — a válasz-oldal | tervezett |
+| **F5c** | Soronkénti jogosultság — a válasz-oldal | ✅ kész |
 | **F6** | Demo workbench-app, `make:aura-table`, kiadás | tervezett |
 
 ---

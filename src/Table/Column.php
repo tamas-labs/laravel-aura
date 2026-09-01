@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace TamasLabs\Aura\Table;
 
 use BackedEnum;
+use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Macroable;
@@ -718,12 +719,82 @@ final class Column
     }
 
     /**
+     * The per-row permission gates this column carries, keyed by the field each
+     * one guards.
+     *
+     * Read straight off the objects the caller built, not off the resolved
+     * header cell: a gate is a closure, and closures are the one thing the
+     * cached blueprint cannot carry. The definition holds the *name* of the
+     * flag, this holds the callback that fills it, and they meet in the
+     * response — see `Response\RowPermissions`.
+     *
+     * @return array<string, Closure>
+     *
+     * @throws InvalidDefinition When a gated configuration has no field to guard.
+     */
+    public function rowPermissions(): array
+    {
+        $gates = [];
+
+        if ($this->config instanceof CellConfig) {
+            $gate = $this->config->rowPermission();
+
+            if ($gate instanceof Closure) {
+                $gates[$this->gatedField()] = $gate;
+            }
+        }
+
+        foreach ($this->fieldConfigs as $field => $config) {
+            $gate = $config->rowPermission();
+
+            if ($gate instanceof Closure) {
+                $gates[$field] = $gate;
+            }
+        }
+
+        foreach ($this->actionList() as $action) {
+            $gate = $action->rowPermission();
+
+            if ($gate instanceof Closure) {
+                $gates[$action->field()] = $gate;
+            }
+        }
+
+        return $gates;
+    }
+
+    /**
      * Is this column searchable? Read by inference, which only offers a range
      * input on a column that has a search input at all.
      */
     public function isSearchable(): bool
     {
         return (bool) ($this->attributes['searchable'] ?? false);
+    }
+
+    /**
+     * The field a gate on this column's own renderer guards.
+     *
+     * A configuration only ever reaches the browser under a field name — the
+     * build refuses one whose key and field disagree — so the field is both
+     * where the configuration lands and what the flag is named after. A column
+     * with neither has nothing to gate.
+     *
+     * @throws InvalidDefinition
+     */
+    private function gatedField(): string
+    {
+        $field = $this->declaredField();
+
+        if ($field !== null) {
+            return $field;
+        }
+
+        $key = $this->attributes['key'] ?? $this->attributes['content'] ?? null;
+
+        throw InvalidDefinition::permissionNeedsField(
+            is_string($key) ? '"'.$key.'"' : '(with no key)',
+        );
     }
 
     /**

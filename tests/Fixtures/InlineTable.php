@@ -29,8 +29,10 @@ final class InlineTable extends AuraTable
         private readonly ?TableSettings $tableSettings = null,
         private readonly ?CellRules $rules = null,
         ?string $resource = null,
+        bool $cached = false,
     ) {
         $this->resource = $resource;
+        $this->cache = $cached;
     }
 
     /**

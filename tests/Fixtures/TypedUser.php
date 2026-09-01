@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 /**
  * The same `users` table as {@see User}, but with casts declared.
@@ -15,6 +16,15 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * Separate on purpose: the query tests assert on raw column values, and casting
  * `balance` to a decimal string or `created_at` to a Carbon instance would
  * change what those tests compare without changing what they are about.
+ *
+ * @property int $id
+ * @property int|null $company_id
+ * @property string $first_name
+ * @property string $last_name
+ * @property string|null $email
+ * @property Status|null $status
+ * @property string $balance
+ * @property Carbon|null $created_at
  */
 final class TypedUser extends Model
 {

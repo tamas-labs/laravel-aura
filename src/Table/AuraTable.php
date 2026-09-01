@@ -15,6 +15,7 @@ use TamasLabs\Aura\Query\FieldPermissions;
 use TamasLabs\Aura\Request\AuraRequest;
 use TamasLabs\Aura\Response\AuraPayload;
 use TamasLabs\Aura\Response\NumericFields;
+use TamasLabs\Aura\Response\RowPermissions;
 
 /**
  * One table, as a class.
@@ -83,6 +84,18 @@ abstract class AuraTable
     protected ?string $resource = null;
 
     /**
+     * {@see self::columns()}, called once.
+     *
+     * The list is asked for twice per request — once to build the definition,
+     * once to collect the permission gates the definition cannot carry — and
+     * {@see self::columns()} is documented as request-independent, so calling
+     * it again would only rebuild the same objects.
+     *
+     * @var list<Column|ColumnGroup>|null
+     */
+    private ?array $entries = null;
+
+    /**
      * The query the table pages through. Constraints that are always true —
      * scoping to a tenant, eager loads — belong here.
      *
@@ -136,12 +149,51 @@ abstract class AuraTable
 
         $aura = AuraRequest::fromHttp($request, $blueprint->permissions);
 
-        $payload = AuraPayload::fromPaginator(AuraQuery::paginate($this->query(), $aura));
+        $paginator = AuraQuery::paginate($this->query(), $aura);
 
-        $data = $payload->toArray();
+        $data = AuraPayload::fromPaginator($paginator)->toArray();
         $data['items'] = NumericFields::coerce($data['items'], $blueprint->numericFields);
 
+        // Last, and from the models rather than the rows: a policy wants the
+        // object, and nothing after this may overwrite a permission flag.
+        $data['items'] = $this->rowPermissions()->apply(
+            array_values($paginator->items()),
+            $data['items'],
+        );
+
         return $blueprint->definition + $data;
+    }
+
+    /**
+     * The per-row permission gates the columns declared.
+     *
+     * Built fresh every time, and deliberately outside {@see self::blueprint()}:
+     * a gate is a closure and the blueprint is cached as plain arrays. What the
+     * cache holds is the *name* of each flag, written into the definition as a
+     * condition; what this holds is the callback that fills it.
+     *
+     * The two can only drift in one direction. A flag named in a cached
+     * definition with no gate left to fill it is simply absent from the rows,
+     * and an absent flag is not `true` — the cell stays hidden. A gate with no
+     * flag adds an unread field. Neither reveals anything.
+     *
+     * @throws InvalidDefinition When two gates would write one flag.
+     */
+    public function rowPermissions(): RowPermissions
+    {
+        $permissions = RowPermissions::make();
+
+        foreach ($this->entries() as $entry) {
+            $columns = $entry instanceof ColumnGroup ? $entry->columns() : [$entry];
+
+            foreach ($columns as $column) {
+                foreach ($column->rowPermissions() as $field => $gate) {
+                    $permissions->add($field, $gate);
+                }
+            }
+        }
+
+        return $permissions;
     }
 
     /**
@@ -225,7 +277,7 @@ abstract class AuraTable
      */
     private function build(): TableBlueprint
     {
-        $entries = $this->columns();
+        $entries = $this->entries();
 
         if ($entries === []) {
             throw InvalidDefinition::noColumns(static::class);
@@ -241,5 +293,15 @@ abstract class AuraTable
         );
 
         return $builder->build();
+    }
+
+    /**
+     * The column list, memoised for the request.
+     *
+     * @return list<Column|ColumnGroup>
+     */
+    private function entries(): array
+    {
+        return $this->entries ??= $this->columns();
     }
 }

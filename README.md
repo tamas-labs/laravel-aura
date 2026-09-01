@@ -27,6 +27,8 @@ and it answers the request.
 - 🎨 **Nine cell renderers** — badge, link, button, icon, modal, progress, and the rest — with
   per-row conditions, and a table that refuses the four ways Aura fails silently
 - 🧩 **Grouped headers, footers, presets**, and `Macroable` builders throughout
+- 🔒 **Per-row permissions** — `allowedWhen()` hides a cell for the rows a policy denies, prepared
+  once per page rather than once per row ([reference](./README.en.md#per-row-permissions))
 - ⚡ **Cacheable definition** — the header, body and footer do not depend on the request
 - ✅ **Schema-validated** against [`tamas-labs/aura-schema`](https://github.com/tamas-labs/aura-schema)
   in the test suite, offline — no network call, and an unresolvable schema throws
@@ -34,10 +36,11 @@ and it answers the request.
 
 ## Status
 
-The definition core (**F3**), the cell builders (**F4**) and the action layer (**F5a**, **F5b**)
-are complete: a table is a class, serves a request end to end, renders badges, links, progress bars
-and the rest conditionally per row, and offers the four resource actions in one call — with routes
-from a `$resource`, a named route, or spelled out. Per-row permissions come in **F5c**. See
+The definition core (**F3**), the cell builders (**F4**), the action layer (**F5a**, **F5b**) and
+per-row permissions (**F5c**) are complete: a table is a class, serves a request end to end, renders
+badges, links, progress bars and the rest conditionally per row, offers the four resource actions in
+one call — with routes from a `$resource`, a named route, or spelled out — and can offer a cell to
+some rows and not others. What is left is **F6**: a generator, a demo app and the release. See
 [Status](./README.en.md#status) for the full picture.
 
 Not released: no tag, not on Packagist.

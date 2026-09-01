@@ -36,6 +36,10 @@ fields the query will accept come out of the same definition, so they cannot dri
   - [The key is a placeholder, not a name](#the-key-is-a-placeholder-not-a-name)
   - [Escalation](#escalation)
   - [Routes](#action-routes)
+- [Per-row permissions](#per-row-permissions)
+  - [How it is emitted](#how-it-is-emitted)
+  - [One query for the page, not one per row](#one-query-for-the-page-not-one-per-row)
+  - [Caching](#caching)
 - [Grouped headers](#grouped-headers)
 - [Footers and settings](#footers-and-settings)
 - [Caching the definition](#caching-the-definition)
@@ -57,13 +61,14 @@ fields the query will accept come out of the same definition, so they cannot dri
 
 ## Status
 
-The package is at **F5b** of its plan: a table is a class, it serves a request end to end, its
-cells render as more than text, and the four resource actions are one call — customised or not.
+The package is at **F5c** of its plan: a table is a class, it serves a request end to end, its
+cells render as more than text, the four resource actions are one call — customised or not — and a
+cell can be offered to some rows and not others.
 
 | Works today | Not built yet |
 | --- | --- |
-| `AuraTable` — one class per table, `respond($request)` | Per-row permissions (F5c) |
-| Columns, groups, footers, table settings | `make:aura-table` and the demo app (F6) |
+| `AuraTable` — one class per table, `respond($request)` | `make:aura-table` and the demo app (F6) |
+| Columns, groups, footers, table settings | |
 | Column defaults inferred from the model's casts | |
 | The field whitelist, derived from the columns | |
 | Sorting, searching, filtering, global search | |
@@ -71,9 +76,10 @@ cells render as more than text, and the four resource actions are one call — c
 | The nine cell renderers, with conditions and cell rules | |
 | Action columns — convention mode, and escalation to a full configuration | |
 | Routes from `$resource`, from a named route, or spelled out | |
+| Per-row permissions — `allowedWhen()`, batched or not | |
 | A cacheable, request-independent definition | |
 
-What is still missing is the per-row half: deciding which rows get a link at all, which is F5c.
+What is left is developer experience: a generator, a demo app, and the release.
 
 The package is **not released**: no tag, not on Packagist. Install it from the repository.
 
@@ -803,6 +809,116 @@ supported way to use a route name.
 
 ---
 
+## Per-row permissions
+
+Some rows may be edited and some may not. `allowedWhen()` says which, on the action or on the cell
+configuration, and the cell simply is not there for the rows it denies:
+
+```php
+use Illuminate\Support\Facades\Gate;
+
+Column::actions('id',
+    Action::show(),
+    Action::edit()->allowedWhen(fn (User $user) => Gate::allows('update', $user)),
+    Action::destroy()->allowedWhen(fn (User $user) => Gate::allows('delete', $user)),
+)
+```
+
+The callback is handed the row's **model**, not the array it flattens to — a policy wants the
+object. Anything truthy allows the row.
+
+> **Hiding a cell is not authorisation.** The row is still in the payload, the identifier is still
+> in it, and the route is still in `columnConfigs` for anyone who reads the response. This keeps the
+> table from offering an action the server would then refuse; the refusal itself has to live on the
+> route. Give `allowedWhen()` the policy the route is protected by, not a second rule that happens
+> to agree today.
+
+The same call works on any cell configuration:
+
+```php
+Column::make('email')->as(
+    Link::make()->route('users/{id}')->allowedWhen(fn (User $user) => Gate::allows('view', $user)),
+)
+```
+
+### How it is emitted
+
+Aura renders nothing at all when no `if` branch matched and there is no `else`
+(`resolve-conditional-config.ts`). That is the mechanism. The gate is a hidden per-row flag, and the
+configuration is one condition over it:
+
+```json
+{
+  "type": "icon",
+  "key": "_allowed_edit_icon",
+  "if": [{ "true": true, "icon": "edit", "route": "admin/users/{id}/edit", "key": "id" }]
+}
+```
+
+and the rows carry the flag:
+
+```json
+{ "id": 1, "last_name": "Lovelace", "_allowed_edit_icon": true }
+```
+
+Four properties of that payload are deliberate, and each is a way this could otherwise fail quietly:
+
+- **The flag is in every row, `false` included.** A missing field reads as `undefined`, and an
+  undefined flag hides the cell exactly as a denial does — so a gate that stopped running would look
+  like a table where nobody is allowed anything. It is always there to be looked at.
+- **It is a real `bool`.** Aura's `true` operator is an exact comparison (`fieldValue === true`), so
+  a `tinyint` `1`, or the `"1"` a driver hands back, would deny every row without a word. Whatever
+  the callback returns is cast.
+- **The gate wraps the configuration rather than sitting beside it.** Everything the cell renders is
+  inside the branch, including the caller's own `when()` / `otherwise()`. A configuration has one
+  condition field, so a gate sharing the level with your own conditions would have to read the same
+  field as they do, and an `otherwise()` beneath it would render the cell for precisely the rows the
+  gate denied. Outside, it cannot be reached past — which is why the two are not refused as a pair.
+- **`cellRules` stays at the root.** It is not content: Aura reads it from `columnConfigs[column.key]`
+  and styles the `<td>` whether or not anything renders inside it.
+
+The flag is named after the field it guards, with dots flattened —
+`Column::make('company.name')` gates on `_allowed_company_name`, because a dotted name would send
+Aura's `resolveValue` looking for a `name` inside an `_allowed_company` no row carries. Two gates
+that would write one flag are refused rather than silently merged.
+
+An action that is gated **escalates**, like any other customisation: a generated configuration
+carries no condition, so the server has to emit the whole entry — which means `$resource`, or a
+route on the action. An ungated action beside it still costs nothing.
+
+### One query for the page, not one per row
+
+`allowedWhen()` is handed a model that is already in memory and costs nothing. When the decision
+needs a lookup the rows cannot answer on their own, `allowedWhenAll()` prepares it once for the
+whole page and returns the per-row test:
+
+```php
+use Illuminate\Database\Eloquent\Collection;
+
+Action::destroy()->allowedWhenAll(function (Collection $rows) {
+    $locked = Lock::whereIn('post_id', $rows->modelKeys())->pluck('post_id')->flip();
+
+    return fn (Post $post) => ! $locked->has($post->id);
+});
+```
+
+The collection is the page as Eloquent models, so `modelKeys()`, `loadMissing()` and the rest are
+there. The outer callback runs once per response; only the inner one runs per row. Returning
+anything but a callable from it is refused.
+
+### Caching
+
+A gate is a closure, and the [cached definition](#caching-the-definition) is plain arrays. What the
+cache holds is the flag's *name*, written into the definition as a condition; the callback that
+fills it is collected fresh on every request, so `$cache = true` and `allowedWhen()` work together.
+
+They can only drift in one direction. A cached definition that still names a flag no column fills
+any more produces rows without that field — and an absent flag is not `true`, so the cell stays
+hidden. A gate whose flag is no longer in any condition adds an unread field. Neither reveals
+anything.
+
+---
+
 ## Grouped headers
 
 ```php
@@ -931,6 +1047,10 @@ letting the browser render the wrong thing:
 | A `$resource` or an action route that is absolute, or contains a dot | Aura prefixes `siteName` itself and turns every dot into a slash — a route name passed as a path resolves to a real URL with the identifier missing |
 | `routeName()` naming an unregistered route | the action would point at an empty path |
 | `routeName()` leaving more than one parameter open | only one can be filled from the row: the one the action column keys on |
+| Two permission gates writing one flag | the flag is named after the field it guards, so two fields differing only in a dot collide and one gate would decide both cells |
+| `allowedWhen()` on a column that names no field | a configuration reaches the browser under a field name, and the flag is named after it |
+| `allowedWhenAll()` returning anything but a callable | it is given the page and has to hand back the per-row test |
+| A gate over conditions already five deep | the gate is a sixth level, and Aura resolves five |
 
 ---
 
@@ -1227,7 +1347,7 @@ builds this image so the Dockerfile cannot rot.
 | **F4** | Cell builders: badge, link, button, icon, modal, progress, conditional configuration | ✅ done |
 | **F5a** | Actions in convention mode: `Action`, `Column::actions()` | ✅ done |
 | **F5b** | Escalation to an explicit `columnConfig`, and route building | ✅ done |
-| **F5c** | Per-row permissions — the response side | planned |
+| **F5c** | Per-row permissions — the response side | ✅ done |
 | **F6** | Demo workbench app, `make:aura-table`, release | planned |
 
 ---
