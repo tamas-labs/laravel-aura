@@ -8,6 +8,12 @@ services:
                 UID: ${UID:-1000}
                 GID: ${GID:-1000}
         working_dir: /package
+        # `composer serve` binds the demo application to 0.0.0.0:8000 inside the
+        # container; the Aura dev server in `v1.0/` calls it on the host port.
+        # Nothing else in this package listens, so the mapping is idle until
+        # then.
+        ports:
+            - '${AURA_WORKBENCH_PORT:-8000}:8000'
         volumes:
             - .:/package
             - composer-cache:/home/app/.composer

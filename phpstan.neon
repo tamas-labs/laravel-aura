@@ -6,4 +6,5 @@ parameters:
     paths:
         - src
         - tests
+        - workbench
     tmpDir: build/phpstan

@@ -75,3 +75,10 @@ jobs:
 
             - name: Run the quality gate in the container
               run: docker compose run --rm php composer quality
+
+            # After the gate, never before: the build writes a `.env` into
+            # Testbench's skeleton. It proves `testbench.yaml` still describes a
+            # bootable application — the migrations and the seeder are covered
+            # by the suite, the build recipe itself is not.
+            - name: Build the demo application
+              run: docker compose run --rm php composer build

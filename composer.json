@@ -46,7 +46,8 @@
     "autoload-dev": {
         "psr-4": {
             "TamasLabs\\Aura\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/"
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
         }
     },
     "extra": {
@@ -65,6 +66,11 @@
             "@lint",
             "@analyse",
             "@test"
+        ],
+        "build": "@php vendor/bin/testbench workbench:build --ansi",
+        "serve": [
+            "@build",
+            "@php vendor/bin/testbench serve --ansi --host=0.0.0.0 --port=8000"
         ]
     },
     "config": {

@@ -54,6 +54,7 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [The wire contract](#the-wire-contract)
 - [Validating your own payloads](#validating-your-own-payloads)
 - [Development](#development)
+  - [The demo application](#the-demo-application)
 - [Roadmap](#roadmap)
 - [License](#license)
 
@@ -1330,9 +1331,39 @@ docker compose run --rm php vendor/bin/pint      # apply formatting
 One service, `php`, on `php:8.4-cli-alpine`. **No database container** — the suite runs on
 in-memory SQLite, so `docker compose up` is never needed.
 
-The quality gate is Laravel Pint (`laravel` preset), PHPStan/Larastan at level **max** over `src/`
-and `tests/`, and Pest. CI runs the matrix natively (PHP 8.3/8.4 × Laravel 12/13) and separately
-builds this image so the Dockerfile cannot rot.
+The quality gate is Laravel Pint (`laravel` preset), PHPStan/Larastan at level **max** over `src/`,
+`tests/` and `workbench/`, and Pest. CI runs the matrix natively (PHP 8.3/8.4 × Laravel 12/13) and
+separately builds this image so the Dockerfile cannot rot.
+
+<a id="the-demo-application"></a>
+### The demo application
+
+`workbench/` is a small Laravel application — one model, one table class, one route — that exists
+to be pointed at a browser. It is the one question the test suite cannot answer: whether Aura's own
+preprocessor really turns `show_icon` into a link, and whether an escalated configuration renders
+the same as the generated one.
+
+```bash
+docker compose run --rm php composer build      # create the SQLite file, migrate, seed
+docker compose run --rm php composer serve      # build, then serve on http://localhost:8000
+```
+
+Then point the Aura dev server in `v1.0/` at `http://localhost:8000/api/employees`. CORS is open
+for every origin — this application never leaves a laptop — so the Vite dev server on its own port
+can call it straight away.
+
+`workbench/app/Tables/EmployeeTable.php` is the demo table, and it is deliberately one of
+everything: an enum-backed badge and filter, a currency column with a conditional colour, a
+progress bar with thresholds, a relation sorted through a subquery, and an action column carrying
+all three action modes at once — `show` in convention mode, `edit` escalated by a tooltip,
+`destroy` gated by a per-row permission.
+
+Nothing under `workbench/` ships: `.gitattributes` marks it `export-ignore`, and it is not in the
+package's autoload.
+
+> The demo writes a `.env` into Testbench's skeleton inside `vendor/`, and a skeleton `.env` is
+> read by every later test run. `phpunit.xml` therefore pins the cache, queue and session drivers
+> the suite depends on, so running the demo cannot change what the tests do.
 
 ---
 

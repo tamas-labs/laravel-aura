@@ -21,5 +21,16 @@
         <env name="APP_ENV" value="testing"/>
         <env name="DB_CONNECTION" value="testing"/>
         <env name="DB_DATABASE" value=":memory:"/>
+        <!--
+            Pinned rather than left to Testbench's defaults: the demo app's
+            `composer build` writes a `.env` into the Testbench skeleton, and a
+            skeleton `.env` is loaded by every later test run. Its `database`
+            cache and queue drivers would send the caching tests looking for a
+            `cache` table that no migration here creates. These entries win —
+            Dotenv never overwrites a variable that is already set.
+        -->
+        <env name="CACHE_STORE" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
     </php>
 </phpunit>

@@ -1,0 +1,36 @@
+# The demo application: `composer serve` boots it, and the Aura dev server in
+# `v1.0/` points its table at it. Everything here exists to be looked at in a
+# browser — the test suite never reads this file.
+providers:
+    - TamasLabs\Aura\AuraServiceProvider
+    - Workbench\App\Providers\WorkbenchServiceProvider
+
+migrations:
+    - workbench/database/migrations
+
+env:
+    # The container sets APP_ENV=testing for the suite; the demo is not a test
+    # run, and a log line saying otherwise sends you looking in the wrong place.
+    - APP_ENV=local
+    - APP_KEY="base64:8dVjMSXvJ6xUcbFHNn0dz5Ft1ZG89lqOZ+MHhYnWFtA="
+    - APP_DEBUG=true
+    # A real file, not `:memory:` — the demo has to survive between requests.
+    # It lives in Testbench's own skeleton, which `workbench:build` recreates.
+    - DB_CONNECTION=sqlite
+
+workbench:
+    start: /api/employees
+    health: true
+    discovers:
+        # The demo is an API and nothing else: no views, no web routes, no
+        # Blade components. `config` is on so `workbench/config/cors.php`
+        # replaces the skeleton's.
+        config: true
+        api: true
+    build:
+        - workbench-create-sqlite-db
+        - migrate-fresh
+        # `db:seed` looks the class up in the application's root namespace,
+        # which is Testbench's skeleton, not this package.
+        - db-seed:
+              --class: \Workbench\Database\Seeders\DatabaseSeeder

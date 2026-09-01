@@ -8,6 +8,29 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **Demo-alkalmazás (F6.1).** A `workbench/` egy Testbench-workbench: egy modell, egy tábla-osztály,
+  egy route — `composer serve`, és a `v1.0/`-ban futó Aura dev-szerver a
+  `http://localhost:8000/api/employees` címre mutathat. Ez az az egy kérdés, amit a teszt-suite nem
+  tud megválaszolni: hogy az Aura preprocesszora tényleg azt rendereli-e, amit ez a csomag kiad.
+    - Az `EmployeeTable` szándékosan mindenből egy: enum-alapú badge és szűrő, pénznemes oszlop
+      feltételes színnel, folyamatjelző küszöbökkel, alkérdéssel rendezett reláció, és egy
+      action-oszlop, amiben egyszerre van jelen mind a három akció-mód (`show` konvencióban, `edit`
+      tooltip miatt eszkalálva, `destroy` soronkénti jogosultsággal kapuzva).
+    - A `workbench/` alól semmi nem kerül a csomagba (`.gitattributes` `export-ignore`), de benne
+      van a kapuban: Pint, PHPStan `max`, és a `tests/Workbench/DemoAppTest.php` — ami a route-okat,
+      a CORS-preflightot, a whitelistet és a kapuzott akciót is végigjárja egy futó HTTP-kérésen.
+    - **A `HandleCors` globálisan kerül be**, nem route-middleware-ként: a preflight `OPTIONS` olyan
+      útvonalra megy, amire nincs route, tehát a route-middleware sosem futna le. Az `api`
+      middleware-csoportot is kézzel kell regisztrálni — a Testbench üres middleware-veremmel bootol.
+
+### Javítva
+
+- **A `phpunit.xml` mostantól rögzíti a `CACHE_STORE` / `QUEUE_CONNECTION` / `SESSION_DRIVER`
+  értékeket.** A demo buildje egy `.env`-et ír a Testbench `vendor/`-on belüli skeletonjába, amit
+  minden későbbi teszt-futás beolvas; az abban lévő `CACHE_STORE=database` miatt a cache-elést
+  vizsgáló tesztek egy `cache` táblát kerestek, amit itt semmi nem hoz létre. A demo futtatása így
+  többé nem változtatja meg, mit csinálnak a tesztek.
+
 - **Soronkénti jogosultság (F5c).** `allowedWhen()` az akción vagy bármelyik cella-konfiguráción:
   amelyik sort a callback elutasítja, ott a cella nincs ott. A callback a sor **modelljét** kapja.
     - **A kapu körbeveszi a konfigurációt, nem mellé áll.** A gyökér a `type`, a rejtett flag mint

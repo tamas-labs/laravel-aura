@@ -55,6 +55,7 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [A dróton lévő szerződés](#a-dróton-lévő-szerződés)
 - [A saját payloadod validálása](#a-saját-payloadod-validálása)
 - [Fejlesztés](#fejlesztés)
+  - [A demo-alkalmazás](#a-demo-alkalmazas)
 - [Ütemterv](#ütemterv)
 - [Licenc](#licenc)
 
@@ -1351,9 +1352,40 @@ docker compose run --rm php vendor/bin/pint      # formázás alkalmazása
 Egyetlen service, a `php`, `php:8.4-cli-alpine`-on. **Adatbázis-konténer nincs** — a suite
 in-memory SQLite-on fut, így a `docker compose up`-ra soha nincs szükség.
 
-A minőségi kapu: Laravel Pint (`laravel` preset), PHPStan/Larastan **max** szinten a `src/` és a
-`tests/` felett, valamint Pest. A CI a mátrixot natívan futtatja (PHP 8.3/8.4 × Laravel 12/13), és
-külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
+A minőségi kapu: Laravel Pint (`laravel` preset), PHPStan/Larastan **max** szinten a `src/`, a
+`tests/` és a `workbench/` felett, valamint Pest. A CI a mátrixot natívan futtatja
+(PHP 8.3/8.4 × Laravel 12/13), és külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
+
+<a id="a-demo-alkalmazas"></a>
+### A demo-alkalmazás
+
+A `workbench/` egy kis Laravel-alkalmazás — egy modell, egy tábla-osztály, egy route —, ami azért
+van, hogy böngészőnek lehessen mutatni. Ez az az egy kérdés, amit a teszt-suite nem tud
+megválaszolni: hogy az Aura saját preprocesszora tényleg linket csinál-e a `show_icon`-ból, és hogy
+az eszkalált konfiguráció ugyanúgy renderel-e, mint a generált.
+
+```bash
+docker compose run --rm php composer build      # SQLite-fájl, migráció, seed
+docker compose run --rm php composer serve      # build, majd kiszolgálás a http://localhost:8000-en
+```
+
+Utána a `v1.0/`-ban futó Aura dev-szervert a `http://localhost:8000/api/employees` címre kell
+állítani. A CORS minden origin előtt nyitva van — ez az alkalmazás sosem hagy el egy laptopot —,
+tehát a saját portján futó Vite dev-szerver rögtön hívhatja.
+
+A `workbench/app/Tables/EmployeeTable.php` a demo-tábla, és szándékosan mindenből egy: enum-alapú
+badge és szűrő, pénznemes oszlop feltételes színnel, folyamatjelző küszöbökkel, alkérdéssel
+rendezett reláció, és egy action-oszlop, amiben egyszerre van jelen mind a három akció-mód — a
+`show` konvenció-módban, az `edit` tooltip miatt eszkalálva, a `destroy` soronkénti jogosultsággal
+kapuzva.
+
+A `workbench/` alól semmi nem kerül a csomagba: a `.gitattributes` `export-ignore`-nak jelöli, és
+nincs benne a csomag autoloadjában.
+
+> A demo egy `.env`-et ír a Testbench `vendor/`-on belüli skeletonjába, egy skeleton-`.env`-et
+> pedig minden későbbi teszt-futás beolvas. A `phpunit.xml` ezért rögzíti azt a cache-, queue- és
+> session-drivert, amire a suite támaszkodik — így a demo futtatása nem tudja megváltoztatni, mit
+> csinálnak a tesztek.
 
 ---
 

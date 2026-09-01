@@ -40,7 +40,8 @@ The definition core (**F3**), the cell builders (**F4**), the action layer (**F5
 per-row permissions (**F5c**) are complete: a table is a class, serves a request end to end, renders
 badges, links, progress bars and the rest conditionally per row, offers the four resource actions in
 one call — with routes from a `$resource`, a named route, or spelled out — and can offer a cell to
-some rows and not others. What is left is **F6**: a generator, a demo app and the release. See
+some rows and not others. There is a [runnable demo app](./README.en.md#the-demo-application)
+(**F6.1**); what is left of **F6** is a generator, the documentation guard and the release. See
 [Status](./README.en.md#status) for the full picture.
 
 Not released: no tag, not on Packagist.

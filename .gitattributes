@@ -13,4 +13,5 @@
 /compose.yaml     export-ignore
 /phpstan.neon     export-ignore
 /phpunit.xml      export-ignore
+/testbench.yaml   export-ignore
 /pint.json        export-ignore
