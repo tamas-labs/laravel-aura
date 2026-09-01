@@ -170,6 +170,8 @@ abstract class ConditionalBuilder
 
     /**
      * Fill a key only if the caller has not set it.
+     *
+     * @internal
      */
     public function default(string $key, mixed $value): static
     {
@@ -183,6 +185,8 @@ abstract class ConditionalBuilder
     /**
      * How many conditional configurations deep this one goes: 0 when it has no
      * branches at all, 1 when it has branches that are themselves plain.
+     *
+     * @internal
      */
     public function depth(): int
     {
@@ -212,6 +216,8 @@ abstract class ConditionalBuilder
      * {@see NumericFields}.
      *
      * @return list<string>
+     *
+     * @internal
      */
     public function numericFields(string $defaultKey): array
     {
@@ -239,6 +245,8 @@ abstract class ConditionalBuilder
 
     /**
      * Is this configuration conditional at all?
+     *
+     * @internal
      */
     public function isConditional(): bool
     {

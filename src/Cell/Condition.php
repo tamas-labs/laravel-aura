@@ -204,6 +204,8 @@ final readonly class Condition
 
     /**
      * Does this operator compare numbers?
+     *
+     * @internal
      */
     public function isNumeric(): bool
     {

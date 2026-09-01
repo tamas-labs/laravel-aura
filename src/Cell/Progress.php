@@ -179,6 +179,8 @@ final class Progress extends CellConfig
      * number by definition, and Aura will not draw one from a string.
      *
      * @return list<string>
+     *
+     * @internal
      */
     public function numericFields(string $defaultKey): array
     {

@@ -26,6 +26,8 @@ use TamasLabs\Aura\Support\Relations;
  * It is best-effort by design: a field it cannot resolve — a computed column, a
  * relation it cannot follow — simply gets no defaults. Defaults are cosmetic,
  * and guessing wrong is worse than not guessing.
+ *
+ * @internal
  */
 final class Inference
 {

@@ -24,6 +24,8 @@ namespace TamasLabs\Aura\Response;
  * - **Only fields a condition actually reads.** Casting every decimal in the
  *   payload would be a wider change than the problem, and would drop the
  *   trailing zeros a caller may be relying on elsewhere.
+ *
+ * @internal
  */
 final class NumericFields
 {

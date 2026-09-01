@@ -8,6 +8,28 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **Dokumentáció-lefedettségi őr (F6.3).** A `tests/DocsCoverageTest.php` reflexióval végigmegy a
+  `src/` minden osztályán, és elbukik, ha egy publikus metódus egyik teljes referenciában sem
+  szerepel — vagy ha csak az egyikben, mert a két nyelv így csúszik szét. A kiadás előtti audit
+  **284 publikus metódusból 130-at** talált olyannak, amit egyik README sem említ; ez a szám most
+  **nulla**, és nem kézi fegyelem tartja.
+    - **A kimaradás jelölése az `@internal`**, a metóduson vagy az osztályon — ugyanaz a jelölés,
+      ami azt mondja, hogy a `v1.0.0` verzió-ígérete sem fedi. A csomag **83 új jelölést** kapott:
+      a kivételek 38 nevesített konstruktorát, a `Column` / `Action` / `CellConfig`
+      névtérhatárt lépő `resolve()`-jait, a `TableBlueprint` cache-szerializálását, valamint a
+      `RowPermissions`, `NumericFields`, `EnumPresentation` és `Inference` osztályt egészében.
+    - **A dokumentálandó felület így 249 metódus**, és mind a kettő referenciában szerepel. Az őr
+      három dolgot még kihagy, mindegyiket indokkal: egy trait metódusát a traiten számolja, nem
+      minden használó osztályon; egy `@internal` őst felülíró metódust az ős után enged el (ezért
+      elég a `CellConfig::type()`-ot megjelölni a kilenc típusé helyett); és nem kéri számon a
+      keretrendszer horgait (`register()`, `boot()`, `handle()`), amiket nem az olvasó hív.
+    - **Új szakasz mindkét referenciában** (*Every builder method* / *Minden builder-metódus*): a
+      cella-réteg teljes felülete, a négy közös blokk (formázó-lánc, tipográfia, mapping, route)
+      és típusonként az, amit hozzátesz. Ezen felül a `CellRules` keret- és paddingmetódusai, a
+      `Footer::row()`, a `TableSettings::footerHeight()`, az akciók teljes hívástáblája (`alt()`,
+      `modal()` és az, hogy melyik eszkalál), a `FieldPermissions` három `allows*()` kérdése, és a
+      `resource()` felülírása property helyett.
+
 - **`make:aura-table` (F6.2).** `php artisan make:aura-table UserTable --model=User` — a modell
   **saját adatbázistáblájából** skicceli fel az osztályt, nem property-nevekből találgatva: egy
   `Column::make()` oszloponként, azzal a flaggel, amit a típusa és a castja indokol.

@@ -117,6 +117,8 @@ final class CellRules extends ConditionalBuilder
      *
      * @param  string  $defaultKey  The field the conditions read unless told otherwise.
      * @return array<string, mixed>
+     *
+     * @internal
      */
     public function resolve(string $defaultKey): array
     {

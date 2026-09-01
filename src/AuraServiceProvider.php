@@ -24,6 +24,8 @@ final class AuraServiceProvider extends ServiceProvider
     /**
      * Expose the config file to `php artisan vendor:publish --tag=aura-config`,
      * and register `make:aura-table`.
+     *
+     * @internal
      */
     public function boot(): void
     {

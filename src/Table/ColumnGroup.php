@@ -77,6 +77,8 @@ final class ColumnGroup
      * to span at least two columns.
      *
      * @return array<string, mixed>
+     *
+     * @internal
      */
     public function resolve(): array
     {

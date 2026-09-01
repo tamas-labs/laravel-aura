@@ -27,6 +27,7 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [Presets](#presets)
 - [Cell rendering](#cell-rendering)
   - [The nine types](#the-nine-types)
+  - [Every builder method](#every-builder-method)
   - [Multi-field columns](#multi-field-columns)
   - [Conditions](#conditions)
   - [Numeric comparisons](#numeric-comparisons)
@@ -63,14 +64,15 @@ fields the query will accept come out of the same definition, so they cannot dri
 
 ## Status
 
-The package is at **F6.2** of its plan: a table is a class, it serves a request end to end, its
+The package is at **F6.3** of its plan: a table is a class, it serves a request end to end, its
 cells render as more than text, the four resource actions are one call — customised or not — a
-cell can be offered to some rows and not others, and `make:aura-table` writes the first draft.
+cell can be offered to some rows and not others, `make:aura-table` writes the first draft, and the
+reference documentation is now held up by a test rather than by discipline.
 
 | Works today | Not built yet |
 | --- | --- |
-| `AuraTable` — one class per table, `respond($request)` | A documentation-coverage guard (F6.3) |
-| Columns, groups, footers, table settings | The Packagist release (F6.4, F6.5) |
+| `AuraTable` — one class per table, `respond($request)` | The contract-version promise (F6.4) |
+| Columns, groups, footers, table settings | The Packagist release (F6.5) |
 | Column defaults inferred from the model's casts | |
 | The field whitelist, derived from the columns | |
 | Sorting, searching, filtering, global search | |
@@ -82,9 +84,9 @@ cell can be offered to some rows and not others, and `make:aura-table` writes th
 | A cacheable, request-independent definition | |
 | `make:aura-table`, scaffolded from the model's table | |
 | A runnable demo app (`composer serve`) | |
+| A documentation-coverage guard over both references | |
 
-What is left is the release itself: a documentation guard, the contract-version promise, and the
-tag.
+What is left is the release itself: the contract-version promise, and the tag.
 
 The package is **not released**: no tag, not on Packagist. Install it from the repository.
 
@@ -540,6 +542,176 @@ are refused in `set()` itself, which is where both `merge()` and a direct call e
 hand-written `key` would otherwise win over the one the conditions are emitted with, and take the
 conditions with it.
 
+### Every builder method
+
+Most of what a configuration can do comes from four shared blocks; each type then adds a handful of
+its own. What follows is the complete public surface of the cell layer — every other method on
+these classes is marked `@internal` and is not covered by the version promise.
+
+**On every configuration.**
+
+| Method | Does |
+| --- | --- |
+| `when(Condition $c, callable $branch)` | a branch, merged over the base when the condition holds; the first match wins |
+| `otherwise(callable $branch)` | what applies when nothing matched — leaving it out is how a cell is hidden |
+| `on(string $field)` | the field the conditions read; defaults to the one the configuration is attached to |
+| `rules(CellRules $rules)` | conditional styling of the `<td>` the content sits in |
+| `allowedWhen(callable $allowed)` | render only for the rows the callback allows |
+| `allowedWhenAll(callable $resolver)` | the same, prepared once for the whole page |
+| `set(string $key, mixed $value)` | one contract key, explicitly |
+| `merge(array $attributes)` | several at once — the unvalidated escape hatch |
+| `class(string\|array $class)`, `style(string $style)` | CSS on the element the type draws |
+
+**The formatter chain** — on `Text`, `Reference`, `Badge`, `Link`, `Button` and `Custom`. `Icon`,
+`Modal` and `Progress` have none, and inherit no formatting from their column either.
+
+| Method | Does |
+| --- | --- |
+| `number()` | the host app's number format |
+| `currency()` | the host app's `currencyCode` |
+| `date()`, `datetime()` | a date, or a date with time |
+| `time()` | seconds, rendered `HH:mm:ss` |
+| `phone()` | a phone number |
+| `raw()` | render as HTML — Aura sanitises it first, but the shortest safe answer is still not to send markup you did not build |
+| `unit(string $unit)` | a unit appended to the value: `kg`, `%` |
+| `slice(int $characters)` | truncate the rendered text |
+| `uppercase()`, `lowercase()`, `capitalize()` | case |
+| `monospace()` | monospace figures; pairs with `align('end')` |
+| `padStart(int $length, ?string $chars = null)`, `padEnd(…)` | pad to a width |
+| `chars(string $chars)` | the padding character, when it is not passed to `padStart()` directly |
+
+**Typography** — on everything except `Icon` and `Modal`.
+
+| Method | Does |
+| --- | --- |
+| `color(string $color)` | text colour: a Bootstrap theme colour name, or CSS colour syntax |
+| `background(string $color)` | colour behind the content |
+| `align(string $align)` | alignment inside the cell |
+| `fontSize(string $size)` | a `px`/`rem`/`em`/`%` length, or a keyword such as `large` |
+| `fontWeight(int\|string $weight)` | a multiple of 100 from 100 to 900, or a keyword |
+| `italic()`, `normal()` | italics, and undoing them in a branch that has to |
+| `lineHeight(float\|int\|string $lineHeight)` | a positive number, a length, or `normal` |
+| `text(string $utility)` | a Bootstrap `text-*` utility class — framework-bound by nature, and meaningless to a differently styled front end |
+
+**Mapping** — on `Reference`, `Badge`, `Link`, `Button`, `Icon` and `Custom`: `mapping(array
+$mapping)` is a lookup table keyed by the field's value, each entry a set of settings for that
+value. `Progress` has one too, with its own semantics — the keys are ranges (`"0-25"`), not values.
+
+**Routes** — on `Link`, `Button`, `Icon` and `Modal`: `route(string $route)`, described under
+[Routes](#routes).
+
+And what each type adds:
+
+**`Text`** — the contract's `static` type.
+
+| Method | Does |
+| --- | --- |
+| `Text::make(?string $value = null)` | the builder |
+| `value(string $value)` | the text to render; it never reads the row |
+
+**`Reference`** — the row's own value.
+
+| Method | Does |
+| --- | --- |
+| `Reference::make(?string $field = null)` | the builder; the field defaults to the column's |
+| `Reference::combined(array $fields, string $separator = ' ')` | several fields, rendered joined |
+| `value(string $value)` | fixed text, ignoring the row — it wins over `fields` and `field` |
+| `separator(string $separator)` | what goes between joined `fields` values |
+
+**`Badge`**
+
+| Method | Does |
+| --- | --- |
+| `Badge::make(?string $field = null)` | the builder |
+| `Badge::fromEnum(string $enum, ?string $field = null)` | a badge per enum case: label, plus colour and icon where the enum offers them |
+| `value(string $value)` | fixed label text, instead of the field's value |
+| `variant(string $variant)` | base colour, rendered `text-bg-{variant}` |
+| `pill(bool $pill = true)` | render as a pill |
+| `size(string $size)` | `xs`, `sm`, `md`, `lg` or `xl` |
+| `icon(string $icon, ?string $position = null)` | a glyph beside the label — a key into the host app's `icons` registry, not a CSS class |
+| `whenTrue(array $badge)`, `whenFalse(array $badge)` | the badge shown for a truthy and a falsy value |
+| `showZero(bool $show = true)` | render the badge when the number is `0`; on by default |
+| `maxValue(int $max, string $suffix = '+')` | cap the number; past it the badge reads `{max}{suffix}` |
+| `prefix(string $prefix)` | text prepended to the label, `#` say |
+
+**`Link`**
+
+| Method | Does |
+| --- | --- |
+| `Link::make(?string $field = null)` | the builder |
+| `value(string $value)` | fixed link text, instead of the field's value |
+| `variant(string $variant)` | colour: a key into the host app's `variants` registry, or a Bootstrap colour name |
+| `title(string $title)` | tooltip text |
+| `target(string $target)` | anchor `target` — `_blank` also sets a safe `rel`, since the opened page would otherwise get a handle on this one |
+| `rel(string $rel)` | anchor `rel` |
+
+**`Button`**
+
+| Method | Does |
+| --- | --- |
+| `Button::make(?string $label = null)` | the builder |
+| `value(string $value)` | fixed button label |
+| `variant(string $variant)` | colour: a `variants` key, or a Bootstrap colour name |
+| `size(string $size)` | `xs`…`xl` |
+| `rounded(bool $rounded = true)`, `pill(bool $pill = true)` | corner shape |
+| `icon(string $icon, ?string $position = null)` | a glyph — an `icons` registry key |
+| `disabled(bool $disabled = true)` | render it disabled; presentation only, the row still carries its data |
+| `title(string $title)` | tooltip text |
+| `htmlType(string $type)` | the element's `type` attribute: `button`, `submit` or `reset` |
+
+**`Icon`** — no formatter chain and no typography.
+
+| Method | Does |
+| --- | --- |
+| `Icon::make(?string $icon = null)` | the builder; the glyph is an `icons` registry key |
+| `variant(string $variant)`, `color(string $color)` | colour, resolved the same way |
+| `size(string $size)` | `xs`…`xl` |
+| `alt(string $alt)` | accessible label, rendered as `aria-label` — worth setting: a glyph on its own says nothing to a screen reader |
+| `title(string $title)` | tooltip text |
+
+**`Modal`** — a trigger, plus the id of the modal it opens.
+
+| Method | Does |
+| --- | --- |
+| `Modal::make(string $id)` | the builder |
+| `Modal::destroy()` | Aura's built-in delete confirmation |
+| `icon(string $icon, ?string $variant = null)` | icon-trigger shorthand |
+| `button(string $variant, ?string $label = null)` | button-trigger shorthand |
+| `content(CellConfig $content)` | a trigger built from any other cell configuration |
+| `size(string $size)` | trigger size |
+| `alt(string $alt)`, `title(string $title)` | accessible label and tooltip on the trigger |
+| `target(string $target)` | anchor `target`, for a link trigger |
+
+**`Progress`**
+
+| Method | Does |
+| --- | --- |
+| `Progress::make(?string $field = null)` | the builder |
+| `Progress::stacked(array $bars)` | one bar from several segments, each reading its own field |
+| `value(float\|int $value)` | a fixed value, instead of reading one from the row |
+| `max(float\|int\|string $max)`, `min(…)` | the scale; a number, or the name of the field holding it. Defaults are `100` and `0` |
+| `variant(string $variant)` | bar colour |
+| `height(string $height)` | track height, `20px` say |
+| `striped(bool $striped = true, bool $animated = false)` | striped, optionally animated |
+| `label(bool\|string $label = true, ?string $position = null)` | `true` for the value itself, or fixed text |
+| `showValue(bool $show = true)` | show the raw value in the label |
+| `showPercent(bool $show = true, ?int $decimals = null)` | show the percentage, to this many decimals |
+| `affixes(?string $prefix = null, ?string $suffix = null)` | text wrapped around the label |
+| `thresholds(array $thresholds)` | Bootstrap colour → inclusive `[min, max]`; the first range holding the value colours the bar |
+| `mapping(array $mapping)` | range-keyed (`"0-25"`) bar settings |
+
+**`Custom`** — the one type whose contents PHP cannot check.
+
+| Method | Does |
+| --- | --- |
+| `Custom::template(string $template)` | a template string; `{placeholder}` tokens come from the row and from `params()` |
+| `Custom::renderer(string $name)` | a function in the host app's `renderers` registry, returning a node |
+| `Custom::callback(string $name)` | a function in its `callbacks` registry, returning text |
+| `field(string $field)` | the item field holding the value |
+| `fields(array $fields)` | several item fields, passed to the renderer |
+| `value(string $value)` | fixed text |
+| `params(array $params)` | extra values available to the template and to the registered functions |
+
 ### Multi-field columns
 
 A `combined()` column renders one segment per member field, and Aura looks each one up by that
@@ -641,6 +813,18 @@ public function rowRules(): ?CellRules
 ```
 
 Row rules have no column to borrow a field from, so they have to name one with `on()`.
+
+`CellRules` takes the same `when()` / `otherwise()` / `on()` / `set()` / `merge()` calls every
+configuration does, and adds the styling itself:
+
+| Method | Does |
+| --- | --- |
+| `CellRules::make()` | an empty rule set, ready to be given branches |
+| `background(string $color)`, `color(string $color)` | cell background and text colour |
+| `borderTop()`, `borderBottom()`, `borderLeft()`, `borderRight()` | draw a border on that side; each takes `bool $border = true` |
+| `borderColor(string $color)`, `borderWidth(string $width)` | border colour and width, `3px` say |
+| `padding(string $padding)` | inner padding, `8px 16px` say |
+| `opacity(float $opacity)` | between 0 and 1 |
 
 **Row rules are formatting only.** They cannot hide a row, and styling one away leaves its data in
 the payload for anyone reading the response. A row the user must not see belongs outside
@@ -789,6 +973,22 @@ and are **not** a customisation, because Aura generates all three. `set()` reach
 trigger's configuration accepts (`size`, `target`, `rounded`, a `data-*` attribute) and does
 escalate, like everything else.
 
+Everything an action takes:
+
+| Method | Does | Escalates |
+| --- | --- | --- |
+| `Action::create()`, `show()`, `edit()`, `destroy()` | the four resource actions | — |
+| `asIcon()`, `asLink()`, `asButton()` | the shape, and so the field suffix | no |
+| `icon(string $icon)` | the glyph — an `icons` registry key, not a CSS class | yes |
+| `variant(string $variant)` | the colour; on a button used directly as `btn-{variant}` | yes |
+| `label(string $label)` | the visible text of a link or a button — Aura's generated one is the bare prefix (`edit`) | yes |
+| `title(string $title)` | tooltip text | yes |
+| `alt(string $alt)` | accessible label; worth setting on an icon, which says nothing to a screen reader on its own | yes |
+| `route(string $route)`, `routeName(string $name, array $parameters = [])` | where it goes | yes |
+| `modal(string $id)` | the modal a `destroy` opens — escalates on its own, since a generated configuration can only ever name Aura's built-in one | yes |
+| `allowedWhen(callable $allowed)`, `allowedWhenAll(callable $resolver)` | [per-row permissions](#per-row-permissions) | yes |
+| `set(string $key, mixed $value)` | any other key the trigger's configuration accepts | yes |
+
 An escalated action needs a route the *server* can build, which is what `$resource` is for:
 
 ```php
@@ -800,7 +1000,9 @@ final class UserTable extends AuraTable
 ```
 
 Without it — and without a route on the action itself — the build fails and says so. In convention
-mode `$resource` is never needed: the browser builds the route from its own `urlParameter`.
+mode `$resource` is never needed: the browser builds the route from its own `urlParameter`. When
+the base is not a constant — one resource per tenant, say — override `resource(): ?string` instead
+of setting the property.
 
 Two things escalation cannot reproduce byte for byte, both because the registries live in the
 browser:
@@ -1000,7 +1202,8 @@ public function footer(): ?Footer
 ```
 
 A footer is built from the same cells as the header, and validated by the very same schema — which
-includes the rule that a cell naming no field must span at least two columns.
+includes the rule that a cell naming no field must span at least two columns. `Footer::make()`
+declares the first row; `row(Column ...$cells)` adds another below it, as many as the footer needs.
 
 ```php
 public function settings(): TableSettings
@@ -1011,6 +1214,10 @@ public function settings(): TableSettings
         ->stickyFooter();
 }
 ```
+
+The whole set: `stickyHeader()`, `headerHeight(string $height)`, `striped()`, `hoverable()`,
+`stickyFooter()` and `footerHeight(string $height)` — the three flags take `bool $x = true`, the
+two heights a CSS length such as `48px`.
 
 The contract scatters these across `header.settings`, `body.settings` and `footer.settings`.
 `TableSettings` collects them and does the splitting on the way out; a block nobody set is omitted
@@ -1132,6 +1339,10 @@ Four properties hold, and each has a test pinning it:
 - **A rejected field is a 422**, never a silently ignored parameter. The error names the field
   that was refused but never lists the permitted ones — an error response is not a place to
   enumerate the schema.
+
+`allowsSort(string $field)`, `allowsSearch(string $field)` and `allowsFilter(string $field)` answer
+the three questions on their own, if you need the same decision somewhere else — in a policy, or in
+a controller assembling something the table does not serve.
 
 ### AuraRequest
 
@@ -1371,6 +1582,14 @@ The quality gate is Laravel Pint (`laravel` preset), PHPStan/Larastan at level *
 `tests/` and `workbench/`, and Pest. CI runs the matrix natively (PHP 8.3/8.4 × Laravel 12/13) and
 separately builds this image so the Dockerfile cannot rot.
 
+**The documentation is part of the gate.** `tests/DocsCoverageTest.php` reflects over every class
+under `src/` and fails when a public method is mentioned in neither full reference — or in only one
+of the two, which is how the English and the Hungarian text drift apart. A method excluded from
+that count is excluded by being marked `@internal`, on itself or on the class: the same tag that
+says the version promise does not cover it. So adding a builder method means documenting it in
+`README.en.md` **and** `README.hu.md` in the same change, or saying in the code that it is not
+yours to call.
+
 <a id="the-demo-application"></a>
 ### The demo application
 
@@ -1417,7 +1636,8 @@ package's autoload.
 | **F5c** | Per-row permissions — the response side | ✅ done |
 | **F6.1** | Demo workbench app | ✅ done |
 | **F6.2** | `make:aura-table` | ✅ done |
-| **F6.3–6.5** | Documentation guard, contract versioning, release | planned |
+| **F6.3** | Documentation-coverage guard, and the `@internal` line under the version promise | ✅ done |
+| **F6.4–6.5** | Contract versioning, release | planned |
 
 ---
 

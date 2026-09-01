@@ -97,6 +97,8 @@ final class TableSettings
 
     /**
      * @return array<string, mixed>
+     *
+     * @internal
      */
     public function headerSettings(): array
     {
@@ -105,6 +107,8 @@ final class TableSettings
 
     /**
      * @return array<string, mixed>
+     *
+     * @internal
      */
     public function bodySettings(): array
     {
@@ -113,6 +117,8 @@ final class TableSettings
 
     /**
      * @return array<string, mixed>
+     *
+     * @internal
      */
     public function footerSettings(): array
     {

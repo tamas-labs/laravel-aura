@@ -178,6 +178,8 @@ abstract class AuraTable
      * flag adds an unread field. Neither reveals anything.
      *
      * @throws InvalidDefinition When two gates would write one flag.
+     *
+     * @internal
      */
     public function rowPermissions(): RowPermissions
     {
@@ -199,6 +201,8 @@ abstract class AuraTable
     /**
      * The describing half of the response and the fields it implies, from the
      * cache when caching is on.
+     *
+     * @internal
      */
     public function blueprint(): TableBlueprint
     {

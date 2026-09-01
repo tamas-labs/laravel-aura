@@ -41,8 +41,9 @@ per-row permissions (**F5c**) are complete: a table is a class, serves a request
 badges, links, progress bars and the rest conditionally per row, offers the four resource actions in
 one call — with routes from a `$resource`, a named route, or spelled out — and can offer a cell to
 some rows and not others. There is a [runnable demo app](./README.en.md#the-demo-application) and a
-[`make:aura-table` generator](./README.en.md#generating-one) (**F6.1**, **F6.2**); what is left of
-**F6** is the documentation guard and the release. See [Status](./README.en.md#status) for the full
+[`make:aura-table` generator](./README.en.md#generating-one) (**F6.1**, **F6.2**), and both full
+references are held up by a coverage guard rather than by discipline (**F6.3**); what is left of
+**F6** is the release itself. See [Status](./README.en.md#status) for the full
 picture.
 
 Not released: no tag, not on Packagist.

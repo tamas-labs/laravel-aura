@@ -15,6 +15,8 @@ final class UnsupportedPaginator extends RuntimeException implements AuraExcepti
      * The contract requires `meta.last_page` and `meta.total`; neither
      * `simplePaginate()` nor `cursorPaginate()` knows them, because neither runs
      * the count query. Only `LengthAwarePaginator` can answer.
+     *
+     * @internal
      */
     public static function for(object $paginator): self
     {

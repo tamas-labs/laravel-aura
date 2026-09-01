@@ -34,6 +34,8 @@ final readonly class TableBlueprint
 
     /**
      * @return array{definition: array<string, mixed>, fields: array{sortable: list<string>, searchable: list<string>, filterable: list<string>, globalSearch: list<string>, numeric: list<string>}}
+     *
+     * @internal
      */
     public function toArray(): array
     {
@@ -53,6 +55,8 @@ final readonly class TableBlueprint
      * Rebuild from what {@see self::toArray()} stored.
      *
      * @param  array<array-key, mixed>  $cached
+     *
+     * @internal
      */
     public static function fromArray(array $cached): self
     {

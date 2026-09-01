@@ -63,6 +63,8 @@ final readonly class RequestLimits
 
     /**
      * The configured limits, with nothing overridden.
+     *
+     * @internal
      */
     public static function fromConfig(): self
     {

@@ -591,6 +591,8 @@ final class Column
     /**
      * Fill a key only if the caller has not set it — how {@see Inference} and
      * {@see Preset}s stay overridable.
+     *
+     * @internal
      */
     public function default(string $key, mixed $value): self
     {
@@ -607,6 +609,8 @@ final class Column
      * @return array<string, mixed>
      *
      * @throws InvalidDefinition When the column cannot produce a valid cell.
+     *
+     * @internal
      */
     public function resolve(?Model $model): array
     {
@@ -626,6 +630,8 @@ final class Column
 
     /**
      * Does this column belong to the global search?
+     *
+     * @internal
      */
     public function wantsGlobalSearch(): bool
     {
@@ -636,6 +642,8 @@ final class Column
      * CSS classes for this column's data cells, if any.
      *
      * @return string|list<string>|null
+     *
+     * @internal
      */
     public function resolvedCellClass(): string|array|null
     {
@@ -644,6 +652,8 @@ final class Column
 
     /**
      * This column's cell renderer, if it has one.
+     *
+     * @internal
      */
     public function cellConfig(): ?CellConfig
     {
@@ -654,6 +664,8 @@ final class Column
      * The per-field renderers of a multi-field column.
      *
      * @return array<string, CellConfig>
+     *
+     * @internal
      */
     public function fieldConfigs(): array
     {
@@ -662,6 +674,8 @@ final class Column
 
     /**
      * This column's conditional cell styling, if any.
+     *
+     * @internal
      */
     public function cellRules(): ?CellRules
     {
@@ -670,6 +684,8 @@ final class Column
 
     /**
      * Is inference on for this column?
+     *
+     * @internal
      */
     public function infers(): bool
     {
@@ -678,6 +694,8 @@ final class Column
 
     /**
      * The field this column reads, before inference.
+     *
+     * @internal
      */
     public function declaredField(): ?string
     {
@@ -689,6 +707,8 @@ final class Column
     /**
      * Does this column carry the row-selection checkboxes? Read by inference,
      * which supplies the model's key as the field to select on.
+     *
+     * @internal
      */
     public function isSelectable(): bool
     {
@@ -702,6 +722,8 @@ final class Column
      * a multi-field cell like any other — but the guards need it: an action
      * field is only allowed here, and this column's key is a route placeholder
      * rather than a name that can be changed.
+     *
+     * @internal
      */
     public function isActionColumn(): bool
     {
@@ -712,6 +734,8 @@ final class Column
      * The actions this column offers, in order. Empty for any other column.
      *
      * @return list<Action>
+     *
+     * @internal
      */
     public function actionList(): array
     {
@@ -731,6 +755,8 @@ final class Column
      * @return array<string, Closure>
      *
      * @throws InvalidDefinition When a gated configuration has no field to guard.
+     *
+     * @internal
      */
     public function rowPermissions(): array
     {
@@ -766,6 +792,8 @@ final class Column
     /**
      * Is this column searchable? Read by inference, which only offers a range
      * input on a column that has a search input at all.
+     *
+     * @internal
      */
     public function isSearchable(): bool
     {

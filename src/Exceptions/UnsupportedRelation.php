@@ -17,6 +17,8 @@ final class UnsupportedRelation extends RuntimeException implements AuraExceptio
      * has a single answer for `BelongsTo` and `HasOne`.
      *
      * @param  Relation<covariant \Illuminate\Database\Eloquent\Model, covariant \Illuminate\Database\Eloquent\Model, mixed>  $relation
+     *
+     * @internal
      */
     public static function forSort(string $field, Relation $relation): self
     {
@@ -34,6 +36,8 @@ final class UnsupportedRelation extends RuntimeException implements AuraExceptio
      * a misspelling, an accessor, or a method that exists but returns anything
      * else. Reported separately because "only one level is supported" would be
      * an answer to a question nobody asked.
+     *
+     * @internal
      */
     public static function notARelation(string $field, string $path): self
     {
@@ -48,6 +52,8 @@ final class UnsupportedRelation extends RuntimeException implements AuraExceptio
 
     /**
      * Nested relation paths would need one correlated subquery per level.
+     *
+     * @internal
      */
     public static function forNestedSort(string $field): self
     {

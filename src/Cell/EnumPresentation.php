@@ -17,6 +17,8 @@ use TamasLabs\Aura\Contracts\AuraVariant;
  * none still produces a usable table, with case names read as labels. What it
  * cannot produce is colours — those have to come from somewhere, and inventing
  * them per case is worse than leaving them out.
+ *
+ * @internal
  */
 final class EnumPresentation
 {

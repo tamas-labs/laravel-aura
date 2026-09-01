@@ -393,6 +393,8 @@ final class Action
     /**
      * The item field this action occupies, and the name the browser would
      * generate its configuration under.
+     *
+     * @internal
      */
     public function field(): string
     {
@@ -402,6 +404,8 @@ final class Action
     /**
      * Has anything been customised — and so does this action have to emit its
      * own configuration rather than leave the field to the browser?
+     *
+     * @internal
      */
     public function isEscalated(): bool
     {
@@ -416,6 +420,8 @@ final class Action
      * @return array<string, mixed>
      *
      * @throws InvalidDefinition When the route cannot be built.
+     *
+     * @internal
      */
     public function resolve(string $columnKey, ?string $resource, array $headerCell = []): array
     {
@@ -429,6 +435,8 @@ final class Action
      * action column: `columnConfigs` is a flat map keyed by field, so a second
      * `edit_icon` in the header does not get a second entry — it gets the first
      * one's route, built with the first cell's key.
+     *
+     * @internal
      */
     public static function isActionField(string $field): bool
     {
@@ -446,6 +454,8 @@ final class Action
      * A resource base becomes a route, and fails the same two ways.
      *
      * @throws InvalidDefinition
+     *
+     * @internal
      */
     public static function assertUsableResource(string $resource): void
     {

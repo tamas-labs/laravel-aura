@@ -36,6 +36,8 @@ final class Footer
 
     /**
      * @return list<list<Column>>
+     *
+     * @internal
      */
     public function rows(): array
     {

@@ -28,6 +28,7 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [Presetek](#presetek)
 - [Cella-renderelés](#cella-renderelés)
   - [A kilenc típus](#a-kilenc-típus)
+  - [Minden builder-metódus](#minden-builder-metódus)
   - [Többmezős oszlopok](#többmezős-oszlopok)
   - [Feltételek](#feltételek)
   - [Numerikus összehasonlítás](#numerikus-összehasonlítás)
@@ -64,15 +65,15 @@ származnak — így nem tudnak elcsúszni egymástól.
 
 ## Állapot
 
-A csomag a tervének **F6.2** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
+A csomag a tervének **F6.3** fázisánál tart: a tábla osztály, végponttól végpontig kiszolgál egy
 kérést, a cellái többet renderelnek szövegnél, a négy resource-akció egyetlen hívás — testreszabva
-is —, egy cella az egyik sornak felkínálható, a másiknak nem, és a `make:aura-table` megírja az
-első vázlatot.
+is —, egy cella az egyik sornak felkínálható, a másiknak nem, a `make:aura-table` megírja az első
+vázlatot, a referencia-dokumentációt pedig már nem a fegyelem tartja, hanem egy teszt.
 
 | Ma működik | Még nincs kész |
 | --- | --- |
-| `AuraTable` — táblánként egy osztály, `respond($request)` | Dokumentáció-lefedettségi őr (F6.3) |
-| Oszlopok, csoportok, footer, tábla-beállítások | A Packagist-kiadás (F6.4, F6.5) |
+| `AuraTable` — táblánként egy osztály, `respond($request)` | A szerződés-verzió kimondása (F6.4) |
+| Oszlopok, csoportok, footer, tábla-beállítások | A Packagist-kiadás (F6.5) |
 | Oszlop-defaultok a modell castjaiból | |
 | A mező-whitelist, az oszlopokból származtatva | |
 | Rendezés, keresés, szűrés, globális keresés | |
@@ -84,8 +85,9 @@ első vázlatot.
 | Cache-elhető, kérésfüggetlen definíció | |
 | `make:aura-table`, a modell táblájából felskiccelve | |
 | Futtatható demo-alkalmazás (`composer serve`) | |
+| Dokumentáció-lefedettségi őr mindkét referencia felett | |
 
-Ami hátravan, az maga a kiadás: egy dokumentációs őr, a szerződés-verzió kimondása és a tag.
+Ami hátravan, az maga a kiadás: a szerződés-verzió kimondása és a tag.
 
 A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telepítsd.
 
@@ -542,6 +544,177 @@ vissza, mert azok döntik el, hogy a többit hogyan kell olvasni — és a `set(
 mert oda fut be a `merge()` és a közvetlen hívás is. Egy kézzel írt `key` egyébként legyőzné azt,
 amivel a feltételek kimennek, és vinné magával a feltételeket.
 
+### Minden builder-metódus
+
+Amit egy konfiguráció tud, annak a java négy közös blokkból jön; minden típus ezen felül tesz hozzá
+néhányat a sajátjából. Ami itt következik, az a cella-réteg teljes publikus felülete — minden más
+metódus ezeken az osztályokon `@internal`, és nem tartozik a verzió-ígéret alá.
+
+**Minden konfiguráción.**
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `when(Condition $c, callable $branch)` | egy ág, ami illeszkedéskor ráolvad az alapra; az első találat nyer |
+| `otherwise(callable $branch)` | ami akkor érvényes, ha egy ág sem illeszkedett — az elhagyása a cella elrejtésének módja |
+| `on(string $field)` | a mező, amit a feltételek olvasnak; alapból az, amire a konfiguráció rá van akasztva |
+| `rules(CellRules $rules)` | a tartalmat tartó `<td>` feltételes formázása |
+| `allowedWhen(callable $allowed)` | csak azoknak a soroknak renderel, amelyeket a callback enged |
+| `allowedWhenAll(callable $resolver)` | ugyanaz, egyszer előkészítve az egész lapra |
+| `set(string $key, mixed $value)` | egy szerződéskulcs, kézzel |
+| `merge(array $attributes)` | több egyszerre — a validálatlan vészkijárat |
+| `class(string\|array $class)`, `style(string $style)` | CSS a típus által rajzolt elemen |
+
+**A formázó-lánc** — a `Text`, `Reference`, `Badge`, `Link`, `Button` és `Custom` típusokon. Az
+`Icon`, a `Modal` és a `Progress` nem kap ilyet, és az oszloptól sem örököl formázást.
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `number()` | a host app számformátuma |
+| `currency()` | a host app `currencyCode`-ja |
+| `date()`, `datetime()` | dátum, illetve dátum + idő |
+| `time()` | másodpercek `HH:mm:ss` alakban |
+| `phone()` | telefonszám-formátum |
+| `raw()` | HTML-ként rendereli — az Aura előbb tisztítja, de a legrövidebb biztonságos válasz továbbra is az, hogy nem küldesz olyan markupot, amit nem te építettél |
+| `unit(string $unit)` | az érték után írt mértékegység: `kg`, `%` |
+| `slice(int $characters)` | a szöveg csonkolása |
+| `uppercase()`, `lowercase()`, `capitalize()` | kisbetű/nagybetű |
+| `monospace()` | fix szélességű számjegyek; az `align('end')` párja |
+| `padStart(int $length, ?string $chars = null)`, `padEnd(…)` | kitöltés adott szélességre |
+| `chars(string $chars)` | a kitöltő karakter, ha nem közvetlenül a `padStart()`-nak adod |
+
+**Tipográfia** — az `Icon` és a `Modal` kivételével mindenen.
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `color(string $color)` | szövegszín: Bootstrap téma-színnév vagy CSS-szín |
+| `background(string $color)` | a tartalom mögötti szín |
+| `align(string $align)` | igazítás a cellán belül |
+| `fontSize(string $size)` | `px`/`rem`/`em`/`%` hossz, vagy kulcsszó (`large`) |
+| `fontWeight(int\|string $weight)` | 100 és 900 közti százas, vagy kulcsszó |
+| `italic()`, `normal()` | dőlt, illetve a dőltség visszavonása egy ágban |
+| `lineHeight(float\|int\|string $lineHeight)` | pozitív szám, hossz, vagy `normal` |
+| `text(string $utility)` | Bootstrap `text-*` utility-osztály — természeténél fogva keretrendszerhez kötött, egy másképp stílusozott frontendnek nem jelent semmit |
+
+**Mapping** — a `Reference`, `Badge`, `Link`, `Button`, `Icon` és `Custom` típusokon: a `mapping(array
+$mapping)` a mező értéke szerint kulcsolt kereső-tábla, minden bejegyzés egy beállítás-csomag arra
+az értékre. A `Progress`-nek is van, de más szemantikával — ott a kulcsok tartományok (`"0-25"`),
+nem értékek.
+
+**Route-ok** — a `Link`, `Button`, `Icon` és `Modal` típusokon: `route(string $route)`, lásd a
+[Route-ok](#route-ok) szakaszt.
+
+És amit az egyes típusok hozzátesznek:
+
+**`Text`** — a szerződés `static` típusa.
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Text::make(?string $value = null)` | a builder |
+| `value(string $value)` | a megjelenő szöveg; a sort sosem olvassa |
+
+**`Reference`** — a sor saját értéke.
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Reference::make(?string $field = null)` | a builder; a mező alapból az oszlopé |
+| `Reference::combined(array $fields, string $separator = ' ')` | több mező, összefűzve |
+| `value(string $value)` | fix szöveg, a sort figyelmen kívül hagyva — erősebb, mint a `fields` és a `field` |
+| `separator(string $separator)` | ami az összefűzött `fields` értékek közé kerül |
+
+**`Badge`**
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Badge::make(?string $field = null)` | a builder |
+| `Badge::fromEnum(string $enum, ?string $field = null)` | esetenként egy badge: felirat, plusz szín és ikon, ha az enum kínálja |
+| `value(string $value)` | fix felirat a mező értéke helyett |
+| `variant(string $variant)` | alapszín, `text-bg-{variant}` alakban |
+| `pill(bool $pill = true)` | pill-forma |
+| `size(string $size)` | `xs`, `sm`, `md`, `lg` vagy `xl` |
+| `icon(string $icon, ?string $position = null)` | glyph a felirat mellé — kulcs a host app `icons` regiszterébe, nem CSS-osztály |
+| `whenTrue(array $badge)`, `whenFalse(array $badge)` | az igaz, illetve hamis értékhez tartozó badge |
+| `showZero(bool $show = true)` | `0` esetén is renderel; alapból be van kapcsolva |
+| `maxValue(int $max, string $suffix = '+')` | a szám felső korlátja; felette `{max}{suffix}` látszik |
+| `prefix(string $prefix)` | a felirat elé írt szöveg, például `#` |
+
+**`Link`**
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Link::make(?string $field = null)` | a builder |
+| `value(string $value)` | fix linkszöveg a mező értéke helyett |
+| `variant(string $variant)` | szín: kulcs a host app `variants` regiszterébe, vagy Bootstrap színnév |
+| `title(string $title)` | tooltip |
+| `target(string $target)` | az anchor `target`-je — a `_blank` biztonságos `rel`-t is beállít, különben a megnyitott oldal fogást kapna ezen |
+| `rel(string $rel)` | az anchor `rel`-je |
+
+**`Button`**
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Button::make(?string $label = null)` | a builder |
+| `value(string $value)` | fix gombfelirat |
+| `variant(string $variant)` | szín: `variants`-kulcs vagy Bootstrap színnév |
+| `size(string $size)` | `xs`…`xl` |
+| `rounded(bool $rounded = true)`, `pill(bool $pill = true)` | sarokforma |
+| `icon(string $icon, ?string $position = null)` | glyph — `icons`-regiszterkulcs |
+| `disabled(bool $disabled = true)` | letiltva rendereli; csak megjelenés, a sor adata ettől még ott van |
+| `title(string $title)` | tooltip |
+| `htmlType(string $type)` | az elem `type` attribútuma: `button`, `submit` vagy `reset` |
+
+**`Icon`** — se formázó-lánc, se tipográfia.
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Icon::make(?string $icon = null)` | a builder; a glyph `icons`-regiszterkulcs |
+| `variant(string $variant)`, `color(string $color)` | szín, ugyanúgy feloldva |
+| `size(string $size)` | `xs`…`xl` |
+| `alt(string $alt)` | akadálymentes felirat, `aria-label`-ként — érdemes megadni: egy glyph önmagában semmit nem mond a képernyőolvasónak |
+| `title(string $title)` | tooltip |
+
+**`Modal`** — egy trigger, plusz a modal azonosítója, amit megnyit.
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Modal::make(string $id)` | a builder |
+| `Modal::destroy()` | az Aura beépített törlés-megerősítése |
+| `icon(string $icon, ?string $variant = null)` | ikon-trigger rövidítés |
+| `button(string $variant, ?string $label = null)` | gomb-trigger rövidítés |
+| `content(CellConfig $content)` | trigger bármelyik másik cella-konfigurációból |
+| `size(string $size)` | a trigger mérete |
+| `alt(string $alt)`, `title(string $title)` | akadálymentes felirat és tooltip a triggeren |
+| `target(string $target)` | anchor `target`, link-triggerhez |
+
+**`Progress`**
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Progress::make(?string $field = null)` | a builder |
+| `Progress::stacked(array $bars)` | egy sáv több szegmensből, mindegyik a saját mezőjét olvassa |
+| `value(float\|int $value)` | fix érték a sorból olvasott helyett |
+| `max(float\|int\|string $max)`, `min(…)` | a skála; szám, vagy az azt tartó mező neve. Alapból `100` és `0` |
+| `variant(string $variant)` | a sáv színe |
+| `height(string $height)` | a sín magassága, például `20px` |
+| `striped(bool $striped = true, bool $animated = false)` | csíkos, opcionálisan animált |
+| `label(bool\|string $label = true, ?string $position = null)` | `true` az értéket írja ki, vagy fix szöveg |
+| `showValue(bool $show = true)` | a nyers érték a feliratban |
+| `showPercent(bool $show = true, ?int $decimals = null)` | a százalék, ennyi tizedesre |
+| `affixes(?string $prefix = null, ?string $suffix = null)` | a felirat köré írt szöveg |
+| `thresholds(array $thresholds)` | Bootstrap szín → zárt `[min, max]` tartomány; az első tartomány színez, amibe az érték beleesik |
+| `mapping(array $mapping)` | tartomány szerint (`"0-25"`) kulcsolt sáv-beállítások |
+
+**`Custom`** — az egyetlen típus, aminek a tartalmát a PHP nem tudja ellenőrizni.
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `Custom::template(string $template)` | sablonszöveg; a `{placeholder}` tokenek a sorból és a `params()`-ból jönnek |
+| `Custom::renderer(string $name)` | függvény a host app `renderers` regiszterében, ami node-ot ad vissza |
+| `Custom::callback(string $name)` | függvény a `callbacks` regiszterében, ami szöveget ad vissza |
+| `field(string $field)` | az értéket tartó item-mező |
+| `fields(array $fields)` | több item-mező, a renderernek átadva |
+| `value(string $value)` | fix szöveg |
+| `params(array $params)` | további értékek a sablonnak és a regisztrált függvényeknek |
+
 ### Többmezős oszlopok
 
 Egy `combined()` oszlop tagmezőnként egy szegmenst renderel, és az Aura mindegyiket az adott mező
@@ -645,6 +818,18 @@ public function rowRules(): ?CellRules
 
 A sorszabályoknak nincs oszlopuk, amitől mezőt kölcsönözhetnének, ezért `on()`-nal meg kell
 nevezniük egyet.
+
+A `CellRules` ugyanazt a `when()` / `otherwise()` / `on()` / `set()` / `merge()` hívássort viszi,
+mint minden konfiguráció, és ezekkel egészíti ki:
+
+| Metódus | Mit csinál |
+| --- | --- |
+| `CellRules::make()` | üres szabálykészlet, ágakra készen |
+| `background(string $color)`, `color(string $color)` | a cella háttér- és szövegszíne |
+| `borderTop()`, `borderBottom()`, `borderLeft()`, `borderRight()` | keret az adott oldalon; mindegyik `bool $border = true` paramétert vesz |
+| `borderColor(string $color)`, `borderWidth(string $width)` | a keret színe és vastagsága, például `3px` |
+| `padding(string $padding)` | belső margó, például `8px 16px` |
+| `opacity(float $opacity)` | 0 és 1 között |
 
 **A sorszabály csak formázás.** Sort elrejteni nem tud, és a formázással eltüntetett sor adata ott
 marad a payloadban bárkinek, aki elolvassa a választ. Az a sor, amit a felhasználó nem láthat, a
@@ -797,6 +982,22 @@ utótagot —, és **nem** testreszabás, mert az Aura mindhármat generálja. A
 konfigurációjának bármelyik további kulcsát eléri (`size`, `target`, `rounded`, `data-*` attribútum),
 és a többihez hasonlóan eszkalál.
 
+Amit egy akció elfogad:
+
+| Metódus | Mit csinál | Eszkalál |
+| --- | --- | --- |
+| `Action::create()`, `show()`, `edit()`, `destroy()` | a négy resource-akció | — |
+| `asIcon()`, `asLink()`, `asButton()` | az alak, és vele a mező utótagja | nem |
+| `icon(string $icon)` | a glyph — `icons`-regiszterkulcs, nem CSS-osztály | igen |
+| `variant(string $variant)` | a szín; gombon közvetlenül `btn-{variant}` lesz | igen |
+| `label(string $label)` | a link vagy gomb látható szövege — az Aura generált felirata a puszta prefix (`edit`) | igen |
+| `title(string $title)` | tooltip | igen |
+| `alt(string $alt)` | akadálymentes felirat; ikonon érdemes, mert az önmagában semmit nem mond a képernyőolvasónak | igen |
+| `route(string $route)`, `routeName(string $name, array $parameters = [])` | hová megy | igen |
+| `modal(string $id)` | a modal, amit egy `destroy` megnyit — magától eszkalál, mert egy generált konfiguráció csak az Aura beépítettjét tudná megnevezni | igen |
+| `allowedWhen(callable $allowed)`, `allowedWhenAll(callable $resolver)` | [soronkénti jogosultság](#soronkénti-jogosultság) | igen |
+| `set(string $key, mixed $value)` | a trigger konfigurációjának bármelyik további kulcsa | igen |
+
 Az eszkalált akciónak olyan route kell, amit a **szerver** tud felépíteni — erre való a `$resource`:
 
 ```php
@@ -809,7 +1010,8 @@ final class UserTable extends AuraTable
 
 Enélkül — és az akció saját route-ja nélkül — a build elszáll, és megmondja, mit kell beállítani.
 Konvenció-módban a `$resource` soha nem kell: a böngésző a saját `urlParameter`-éből építi az
-útvonalat.
+útvonalat. Ha a bázis nem állandó — mondjuk bérlőnként más —, a property helyett a `resource():
+?string` metódust írd felül.
 
 Két dolgot az eszkaláció nem tud bájtra reprodukálni, mindkettőt azért, mert a regiszterek a
 böngészőben élnek:
@@ -1012,7 +1214,9 @@ public function footer(): ?Footer
 ```
 
 A footer ugyanabból a cellából épül, mint a header, és ugyanaz a séma validálja — beleértve azt a
-szabályt is, hogy a mezőt nem nevező cellának legalább két oszlopot kell átfognia.
+szabályt is, hogy a mezőt nem nevező cellának legalább két oszlopot kell átfognia. A
+`Footer::make()` az első sort deklarálja; a `row(Column ...$cells)` tesz alá még egyet, annyiszor,
+ahányszor a footernek kell.
 
 ```php
 public function settings(): TableSettings
@@ -1023,6 +1227,10 @@ public function settings(): TableSettings
         ->stickyFooter();
 }
 ```
+
+A teljes készlet: `stickyHeader()`, `headerHeight(string $height)`, `striped()`, `hoverable()`,
+`stickyFooter()` és `footerHeight(string $height)` — a három kapcsoló `bool $x = true` paramétert
+vesz, a két magasság CSS-hosszt, például `48px`.
 
 A szerződés ezeket három blokk közt szórja szét: `header.settings`, `body.settings`,
 `footer.settings`. A `TableSettings` összegyűjti őket, és kifelé menet szétosztja; amelyik blokkba
@@ -1146,6 +1354,10 @@ Négy tulajdonság érvényes, mindegyiket teszt rögzíti:
 - **Az elutasított mező 422**, nem csendben eldobott paraméter. A hibaüzenet megnevezi az
   elutasított mezőt, de soha nem sorolja fel az engedélyezetteket — egy hibaválasz nem arra való,
   hogy felsoroljuk benne a sémát.
+
+Az `allowsSort(string $field)`, `allowsSearch(string $field)` és `allowsFilter(string $field)`
+külön-külön is megválaszolja a három kérdést, ha ugyanarra a döntésre máshol is szükség van — egy
+policyben, vagy egy controllerben, ami olyat állít össze, amit a tábla nem szolgál ki.
 
 ### AuraRequest
 
@@ -1392,6 +1604,14 @@ A minőségi kapu: Laravel Pint (`laravel` preset), PHPStan/Larastan **max** szi
 `tests/` és a `workbench/` felett, valamint Pest. A CI a mátrixot natívan futtatja
 (PHP 8.3/8.4 × Laravel 12/13), és külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 
+**A dokumentáció a kapu része.** A `tests/DocsCoverageTest.php` végigmegy reflexióval a `src/`
+minden osztályán, és elbukik, ha egy publikus metódust egyik teljes referencia sem említ — vagy ha
+csak az egyik, mert az angol és a magyar szöveg így csúszik szét. Ami kimarad ebből a
+számításból, az azért marad ki, mert `@internal` — a metóduson vagy az osztályon: ugyanaz a jelölés,
+ami azt mondja, hogy a verzió-ígéret sem fedi. Egy új builder-metódus tehát vagy bekerül a
+`README.en.md`-be **és** a `README.hu.md`-be ugyanabban a változtatásban, vagy a kódban ki van
+mondva, hogy nem a hívóra tartozik.
+
 <a id="a-demo-alkalmazas"></a>
 ### A demo-alkalmazás
 
@@ -1439,7 +1659,8 @@ nincs benne a csomag autoloadjában.
 | **F5c** | Soronkénti jogosultság — a válasz-oldal | ✅ kész |
 | **F6.1** | Demo workbench-app | ✅ kész |
 | **F6.2** | `make:aura-table` | ✅ kész |
-| **F6.3–6.5** | Dokumentációs őr, szerződés-verziózás, kiadás | tervezett |
+| **F6.3** | Dokumentáció-lefedettségi őr, és az `@internal` határ a verzió-ígéret alatt | ✅ kész |
+| **F6.4–6.5** | Szerződés-verziózás, kiadás | tervezett |
 
 ---
 

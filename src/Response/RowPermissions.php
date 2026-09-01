@@ -40,6 +40,8 @@ use TamasLabs\Aura\Exceptions\InvalidDefinition;
  * still in `columnConfigs`, and anyone can type the URL. The gate belongs on
  * the route as well — ideally reading the same policy — and this only keeps the
  * table from offering an action that would then be refused.
+ *
+ * @internal
  */
 final class RowPermissions
 {

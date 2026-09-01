@@ -63,6 +63,8 @@ abstract class CellConfig extends ConditionalBuilder
 
     /**
      * The `type` discriminator Aura dispatches on.
+     *
+     * @internal
      */
     abstract public function type(): string;
 
@@ -336,6 +338,8 @@ abstract class CellConfig extends ConditionalBuilder
      * @return array<string, mixed>
      *
      * @throws InvalidDefinition When the configuration cannot render anything.
+     *
+     * @internal
      */
     public function resolve(string $field, array $headerCell = []): array
     {
@@ -376,6 +380,8 @@ abstract class CellConfig extends ConditionalBuilder
      * Item fields this configuration and its cell rules compare numerically.
      *
      * @return list<string>
+     *
+     * @internal
      */
     public function numericFields(string $defaultKey): array
     {

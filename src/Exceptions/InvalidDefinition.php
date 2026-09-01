@@ -22,6 +22,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * The response is keyed by column; two columns cannot share one key, or the
      * second silently wins in `columnConfigs`, `columnStyles` and the session
      * state Aura persists per column.
+     *
+     * @internal
      */
     public static function duplicateKey(string $key): self
     {
@@ -35,6 +37,8 @@ final class InvalidDefinition extends LogicException implements AuraException
 
     /**
      * The contract requires at least one header row with at least one cell.
+     *
+     * @internal
      */
     public static function noColumns(string $table): self
     {
@@ -44,6 +48,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * `fields` has no single name to send, so the request would carry nothing
      * the server could sort or search on.
+     *
+     * @internal
      */
     public static function multiFieldNeedsReference(string $key, string $operation): self
     {
@@ -58,6 +64,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * `header.settings.searchableItems` is matched against the `field` of a
      * header cell, and a multi-field column has no `field`.
+     *
+     * @internal
      */
     public static function multiFieldInGlobalSearch(string $key): self
     {
@@ -72,6 +80,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * A cell with neither `field` nor `fields` is a grouping cell, and the
      * schema requires those to span at least two columns.
+     *
+     * @internal
      */
     public static function unspannedHeading(?string $content): self
     {
@@ -85,6 +95,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * A group of one is a column with a title, and would emit `colspan: 1` on a
      * field-less cell, which the schema rejects.
+     *
+     * @internal
      */
     public static function emptyGroup(string $content, int $size): self
     {
@@ -101,6 +113,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * renderer reads the rest, and `key` / `if` / `else` are how the conditions
      * are found — a hand-written one wins over the emitted one and takes the
      * conditions with it, silently.
+     *
+     * @internal
      */
     public static function rawStructuralKey(string $key): self
     {
@@ -117,6 +131,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * configuration — reporting it to its error store and nowhere the user
      * looks. A definition that would hit the cap is a mistake worth making
      * loud.
+     *
+     * @internal
      */
     public static function conditionsTooDeep(int $depth, int $max): self
     {
@@ -132,6 +148,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * Without a string `key`, Aura skips the conditions and applies the base
      * configuration (`resolve-conditional-config.ts`). Fail-open, and the wrong
      * direction whenever the condition decides whether something is shown.
+     *
+     * @internal
      */
     public static function conditionsWithoutKey(): self
     {
@@ -147,6 +165,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * nothing at all.
      *
      * @param  list<list<string>>  $alternatives
+     *
+     * @internal
      */
     public static function incompleteCellConfig(string $type, array $alternatives): self
     {
@@ -166,6 +186,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * Aura resolves a route by replacing every dot with a slash, so an absolute
      * URL comes out the other end as a path — `https://app.test/users/5` turns
      * into `/https://app/test/users/5`.
+     *
+     * @internal
      */
     public static function absoluteRoute(string $route): self
     {
@@ -180,6 +202,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * Aura substitutes `\{([\w.]+)\}` and nothing else; a placeholder outside
      * that alphabet survives into the URL as literal text.
+     *
+     * @internal
      */
     public static function unresolvablePlaceholder(string $route, string $placeholder): self
     {
@@ -195,6 +219,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * `columnConfigs` is read by field for the renderer and by key for
      * `cellRules`; a column whose two differ would need both entries, and would
      * quietly get whichever one the lookup happened to reach.
+     *
+     * @internal
      */
     public static function configNeedsMatchingKey(string $key, ?string $field): self
     {
@@ -211,6 +237,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * `columnConfigs` is one flat map keyed by field. A second configuration
      * for the same field overwrites the first rather than joining it, and the
      * column that lost renders the winner's configuration without a word.
+     *
+     * @internal
      */
     public static function conflictingCellConfig(string $field, string $key): self
     {
@@ -226,6 +254,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * A multi-field column has no single field to key a configuration by: Aura
      * builds one segment per member field and looks each one up by name.
+     *
+     * @internal
      */
     public static function configOnMultiFieldColumn(string $key): self
     {
@@ -241,6 +271,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * A member of `fields` is the only thing `configure()` can name.
      *
      * @param  list<string>  $fields
+     *
+     * @internal
      */
     public static function configureUnknownField(string $key, string $field, array $fields): self
     {
@@ -256,6 +288,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * The contract types a heading as a non-empty string or `null`; an empty
      * one fails Aura's own response validation, which takes the whole table
      * down rather than the one cell.
+     *
+     * @internal
      */
     public static function emptyHeading(string $key): self
     {
@@ -273,6 +307,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * escape hatch, which is exactly why it is checked — a cell carrying both
      * fails Aura's own response validation, which takes the whole table down
      * rather than the one column.
+     *
+     * @internal
      */
     public static function fieldAndFields(string $key): self
     {
@@ -290,6 +326,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * The rules are keyed by the column key, and for a multi-field column that
      * key is a name the rows have never heard of — so Aura reads `undefined`,
      * every condition is false, and nothing is ever styled. Silently.
+     *
+     * @internal
      */
     public static function rulesNeedField(string $key): self
     {
@@ -306,6 +344,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * An action column with no actions is a heading with nothing under it, and
      * `fields: []` fails the schema's own `minItems: 1`.
+     *
+     * @internal
      */
     public static function noActions(string $key): self
     {
@@ -319,6 +359,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * `fields` is typed `minItems: 1`, and Aura only treats a cell as a column
      * when it names something (`TableBody.tsx`: `cell.field || cell.fields.length`).
+     *
+     * @internal
      */
     public static function emptyFields(string $key): self
     {
@@ -333,6 +375,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * The action column's key is the route placeholder Aura substitutes per
      * row, so it is not a free choice — the other column is the one that can
      * move.
+     *
+     * @internal
      */
     public static function actionKeyTaken(string $key, bool $selection = false): self
     {
@@ -360,6 +404,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * Sorting, searching or filtering a column of links asks the server to
      * operate on a field that exists nowhere but the URL.
+     *
+     * @internal
      */
     public static function actionColumnOperable(string $key, string $operation): self
     {
@@ -382,6 +428,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * A resource-action field name outside an action column: Aura would build
      * a route for it against whatever key that cell happens to carry.
+     *
+     * @internal
      */
     public static function actionFieldOutsideActionColumn(string $key, string $field): self
     {
@@ -398,6 +446,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * `columnConfigs` is a flat map keyed by field, so the second occurrence of
      * an action does not get a second entry — it gets the first one's, built
      * with the first cell's key.
+     *
+     * @internal
      */
     public static function duplicateAction(string $field, string $first, string $second): self
     {
@@ -414,6 +464,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * An escalated action builds its own route, and the resource convention is
      * where the server-side half of it comes from.
+     *
+     * @internal
      */
     public static function actionNeedsResource(string $field): self
     {
@@ -430,6 +482,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * Aura turns every dot into a slash, so a route name passed where a path
      * belongs resolves to a real URL with the identifier missing.
+     *
+     * @internal
      */
     public static function dottedActionRoute(string $route, ?string $name = null): self
     {
@@ -448,6 +502,8 @@ final class InvalidDefinition extends LogicException implements AuraException
 
     /**
      * The resource base is prefixed onto every generated action route.
+     *
+     * @internal
      */
     public static function invalidResource(string $resource, string $fault): self
     {
@@ -466,6 +522,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * A route name that resolves to nothing would leave the action pointing at
      * an empty path.
+     *
+     * @internal
      */
     public static function unknownRoute(string $name): self
     {
@@ -482,6 +540,8 @@ final class InvalidDefinition extends LogicException implements AuraException
      * the action column keys on.
      *
      * @param  list<string>  $open
+     *
+     * @internal
      */
     public static function ambiguousRoute(string $name, array $open): self
     {
@@ -500,6 +560,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * Two gated cells cannot share one flag: the second registration would
      * overwrite the first, and both cells would then be decided by one of them.
+     *
+     * @internal
      */
     public static function duplicatePermissionField(string $emitted, string $field): self
     {
@@ -516,6 +578,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * `allowedWhen()` needs a field to name its flag after, and to attach the
      * configuration to in the first place.
+     *
+     * @internal
      */
     public static function permissionNeedsField(string $column): self
     {
@@ -531,6 +595,8 @@ final class InvalidDefinition extends LogicException implements AuraException
     /**
      * `allowedWhenAll()` prepares once and decides per row; the preparation has
      * to hand back the decision.
+     *
+     * @internal
      */
     public static function permissionResolverShape(string $emitted, string $returned): self
     {
@@ -546,6 +612,8 @@ final class InvalidDefinition extends LogicException implements AuraException
 
     /**
      * A column has to name its source, unless it is a grouping cell.
+     *
+     * @internal
      */
     public static function missingField(?string $content): self
     {

@@ -23,6 +23,8 @@ final readonly class Search
 
     /**
      * Is this the range shape rather than the term shape?
+     *
+     * @internal
      */
     public function isRange(): bool
     {
