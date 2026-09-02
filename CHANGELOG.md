@@ -6,6 +6,26 @@ szerződés verziója külön él a csomagverziótól.
 
 ## [Unreleased]
 
+### Módosítva
+
+- **A szerződés-függés rögzítve (audit P8 — az utolsó piros kiadási blokkoló).** A
+  `tamas-labs/aura-schema` `v1.0.0` taget kapott, a megkötés `dev-main` helyett **`^1.0`**. Egy VCS
+  repository a git tageket registry nélkül is semver-verziókká oldja fel, tehát a Packagist-hiány
+  nem akadály. Eddig — mivel a `composer.lock` könyvtárcsomagnál nincs commitolva — **semmi nem
+  rögzítette az upstream revíziót**: egy séma-változás úgy fordíthatta pirosra az itteni CI-t, hogy
+  ebben a repóban egyetlen commit sem történt, és egy régi futás nem volt újrajátszható. Új őr a
+  `tests/VersioningTest.php`-ben: `dev-` kezdetű vagy `*` megkötést a szerződés-csomagra elutasít,
+  mert az pontosan ezt az állapotot állítaná vissza.
+- **Hét téves szerződés-leírás javítva az upstreamben, még a tag előtt.** Az audit ötöt nevesített
+  (`true` / `false` / `empty` / `eq` egzaktsága és a `key` állítólagos alapértelmezése) plusz az
+  INV10-et; az Aura forrásának átolvasása kettővel többet hozott: a `null` / `notNull` nem úgy
+  bánik az `undefined`-dal, ahogy a séma állította (a sorból hiányzó mező a `notNull`-ra
+  **illeszkedik**), a `gt` / `gte` / `lt` / `lte` / `between` pedig előbb dátumot próbál, utána
+  mindkét oldalon **számot** vár — numerikus stringre némán hamis (INV11). **Validáció nem
+  változott**: a dokumentumok pontosan ugyanazt fogadják el és utasítják el, mint eddig. Ennek a
+  csomagnak a viselkedése sem változott — eddig is a valóság szerint emittált; ami megszűnt, az az,
+  hogy két nyilvános repó két egymásnak ellentmondó igazságot publikál.
+
 ### Hozzáadva
 
 - **A publikus felület feljegyezve (audit P2 lezárása).** A `tests/Docs/public-surface.txt` a 246

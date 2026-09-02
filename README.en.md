@@ -1597,17 +1597,21 @@ and no field in the payload.
 
 ### Before the tag
 
-Two things are true of `dev-main` that will not be true of a release, and they are worth stating
-rather than discovering:
-
-- **`tamas-labs/aura-schema` is pulled at `dev-main`, and `composer.lock` is not committed** (the
-  library convention). Nothing fixes the upstream revision, so a schema change can turn CI here red
-  with no commit in this repository, and an old CI run cannot be replayed. A git tag on
-  `aura-schema` — a VCS repository resolves tags into semver versions, no registry needed — turns
-  that constraint into `^1.0`. It is a release blocker, not a footnote.
+- **The contract is pinned.** `tamas-labs/aura-schema` was pulled at `dev-main` until it was tagged
+  `v1.0.0` on 2026-09-02; the constraint is `^1.0` now. That mattered because `composer.lock` is not
+  committed (the library convention), so nothing fixed the upstream revision: a schema change could
+  turn CI here red with no commit in this repository, and an old CI run could not be replayed. A VCS
+  repository resolves git tags into semver versions with no registry involved, which is all it took.
+- **Seven contract descriptions were corrected in the same tag**, each one saying the opposite of
+  what Aura does — `columnConfigs` keyed by field rather than by key, `key` having no default, the
+  exactness of `true` / `false` / `eq`, `empty` counting `0` and `false`, `null` not covering
+  `undefined`, and the ordered operators needing numbers on both sides. No validation changed: the
+  documents accept and reject exactly what they did before. Two public repositories publishing
+  contradictory truths is worse than one of them being silent, and a 1.0 tag is the moment it stops
+  being fixable quietly.
 - **The package is not on Packagist**, so `composer require tamas-labs/laravel-aura:dev-main` over a
-  `repositories` entry is the only way to install it, and `dev-main` means "whatever `main` says
-  today" — including a breaking change made an hour ago.
+  `repositories` entry is the only way to install *this* package, and `dev-main` means "whatever
+  `main` says today" — including a breaking change made an hour ago.
 
 ## Validating your own payloads
 

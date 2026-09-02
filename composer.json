@@ -36,7 +36,7 @@
         "orchestra/testbench": "^10.0 || ^11.0",
         "pestphp/pest": "^3.0 || ^4.0",
         "pestphp/pest-plugin-laravel": "^3.0 || ^4.0",
-        "tamas-labs/aura-schema": "dev-main"
+        "tamas-labs/aura-schema": "^1.0"
     },
     "repositories": [
         {

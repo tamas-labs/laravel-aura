@@ -1619,17 +1619,22 @@ szándékosan nincs.
 
 ### A tag előtt
 
-Két dolog igaz a `dev-main`-re, ami egy kiadásra már nem lesz — és jobb kimondani, mint felfedezni:
-
-- **A `tamas-labs/aura-schema` `dev-main`-en jön, a `composer.lock` pedig nincs commitolva** (ez a
-  könyvtár-konvenció). Semmi nem rögzíti a felsőbb revíziót, tehát egy séma-változás úgy tudja
-  pirosra fordítani az itteni CI-t, hogy ebben a repóban egyetlen commit sem történt, egy régi
-  CI-futás pedig nem játszható újra. Egy git tag az `aura-schema`-n ezt `^1.0`-vá teszi — egy VCS
-  repository a tageket semver-verziókká oldja fel, registry nélkül. Ez kiadási blokkoló, nem
-  lábjegyzet.
+- **A szerződés rögzítve van.** A `tamas-labs/aura-schema` `dev-main`-en jött, amíg 2026-09-02-án
+  meg nem született rá a `v1.0.0` tag; a megkötés azóta `^1.0`. Azért számított, mert a
+  `composer.lock` nincs commitolva (ez a könyvtár-konvenció), tehát semmi nem rögzítette a felsőbb
+  revíziót: egy séma-változás úgy tudta pirosra fordítani az itteni CI-t, hogy ebben a repóban
+  egyetlen commit sem történt, egy régi CI-futás pedig nem volt újrajátszható. Egy VCS repository a
+  git tageket semver-verziókká oldja fel, registry nélkül — ennyi kellett hozzá.
+- **Ugyanabban a tagben hét szerződés-leírás is javult**, mindegyik az ellenkezőjét mondta annak,
+  amit az Aura csinál: a `columnConfigs` mező szerint van kulcsolva, nem `key` szerint; a `key`-nek
+  nincs alapértelmezése; a `true` / `false` / `eq` egzakt; az `empty` a `0`-t és a `false`-t is
+  üresnek számolja; a `null` nem fedi az `undefined`-ot; a rendezett operátorok mindkét oldalon
+  számot várnak. Validáció nem változott: a dokumentumok pontosan ugyanazt fogadják el és utasítják
+  el, mint eddig. Két nyilvános repó két egymásnak ellentmondó igazsággal rosszabb, mint ha az egyik
+  hallgat — és egy 1.0-s tag az a pillanat, amikor ez már nem javítható csendben.
 - **A csomag nincs fenn Packagiston**, tehát a `composer require tamas-labs/laravel-aura:dev-main`
-  egy `repositories` bejegyzés mellett az egyetlen telepítési mód — a `dev-main` pedig azt jelenti:
-  „amit a `main` ma mond", beleértve egy egy órája bekerült törő változást is.
+  egy `repositories` bejegyzés mellett az egyetlen telepítési mód *ehhez* a csomaghoz — a `dev-main`
+  pedig azt jelenti: „amit a `main` ma mond", beleértve egy egy órája bekerült törő változást is.
 
 ## A saját payloadod validálása
 

@@ -149,6 +149,23 @@ it('ships the licence its manifest claims', function () {
     );
 });
 
+it('pins the contract to a tagged range, not to a branch', function () {
+    // `composer.lock` is not committed (library convention), so this constraint
+    // is the only thing fixing the upstream revision. A branch constraint —
+    // `dev-main`, or `*` — would mean "whatever main says today": the schema
+    // could turn CI red with no commit here, and an old run could not be
+    // replayed. A VCS repository resolves git tags into semver versions without
+    // a registry, which is what makes the tagged form possible at all.
+    $constraint = auraDig(auraManifest(), 'require-dev', 'tamas-labs/aura-schema');
+
+    Assert::assertIsString($constraint, 'composer.json does not require tamas-labs/aura-schema');
+    Assert::assertDoesNotMatchRegularExpression(
+        '/(^|\s)(dev-|\*)/',
+        $constraint,
+        "tamas-labs/aura-schema is pulled at {$constraint}, which pins nothing",
+    );
+});
+
 it('points at the package it lives in', function () {
     // Packagist reads these; a package page with no issue tracker sends its
     // first bug report to the author's inbox, or nowhere.
