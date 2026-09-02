@@ -1,0 +1,32 @@
+name: Feature request
+description: Something the definition side should be able to express and cannot.
+labels: ['enhancement']
+
+body:
+    - type: textarea
+      id: problem
+      attributes:
+          label: What you are trying to build
+          description: The table, the column, the cell — the thing you want, not the API you imagine for it.
+      validations:
+          required: true
+
+    - type: textarea
+      id: today
+      attributes:
+          label: What you do today
+          description: >
+              The workaround, if there is one. `merge()` is the documented escape hatch for a cell
+              configuration, so a feature request that `merge()` already covers is really a request
+              to make it first-class — worth saying either way.
+      validations:
+          required: true
+
+    - type: textarea
+      id: contract
+      attributes:
+          label: What the contract says
+          description: >
+              Optional, but it decides the answer. The wire contract lives in
+              [tamas-labs/aura-schema](https://github.com/tamas-labs/aura-schema), and Aura has to be
+              able to render it: a property no renderer reads cannot be emitted usefully from here.

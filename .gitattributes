@@ -9,6 +9,8 @@
 /.gitattributes   export-ignore
 /.gitignore       export-ignore
 /CLAUDE.md        export-ignore
+/CONTRIBUTING.md  export-ignore
+/SECURITY.md      export-ignore
 /Dockerfile       export-ignore
 /compose.yaml     export-ignore
 /phpstan.neon     export-ignore

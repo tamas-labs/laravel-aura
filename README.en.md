@@ -1708,6 +1708,20 @@ compares *committed* revisions — it clones the repository into a temporary dir
 uncommitted work is invisible to it — and it needs the tags, which is why the CI job checks out the
 full history rather than the shallow default.
 
+**Contributing and reporting.** [CONTRIBUTING.md](./CONTRIBUTING.md) collects the above into the
+form a first change needs — the command table, the rules a pull request has to carry, and the
+release process. [SECURITY.md](./SECURITY.md) covers vulnerabilities, and names the two rules that
+are the boundary (`FieldPermissions`, and the single raw SQL expression) alongside the two things
+that deliberately are not — `allowedWhen()` hides a cell without authorising anything, and every
+emitted payload is public data.
+
+**A release is a tag, and the tag is the last step.** Composer installs a package from its git tag,
+so there is nothing to publish and nothing to abort: by the time
+[`.github/workflows/release.yml`](./.github/workflows/release.yml) runs, the release exists. What it
+does is re-run the gate with its coverage variant, refuse a tag that has no dated `CHANGELOG.md`
+section of its own — the manifest carries no `version` key, so the changelog is the only record a
+tag can be checked against — and publish that section as the release notes.
+
 **The documentation is part of the gate.** `tests/DocsCoverageTest.php` reflects over every class
 under `src/` and fails when a public method is mentioned in neither full reference — or in only one
 of the two, which is how the English and the Hungarian text drift apart. A method excluded from

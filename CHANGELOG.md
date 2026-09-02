@@ -47,6 +47,33 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **Kiadási workflow és a community-fájlok (audit P5).** A `.github/workflows/release.yml` `v*.*.*`
+  tagre indul. **Nem publikál semmit, és ez a lényege**: a Composer a git tagből telepít, tehát a
+  tag *maga* a kiadás — mire a workflow elindul, már nyilvános, nincs mit megszakítani. Amit
+  csinál: újrafuttatja a kaput a lefedettségi változatával, **elutasít egy olyan taget, aminek
+  nincs saját dátumozott `CHANGELOG.md` szakasza** (a manifest szándékosan nem visz `version`
+  kulcsot, tehát a változásnapló az egyetlen feljegyzés, amihez egy tag mérhető), és azt a
+  szakaszt teszi ki kiadási jegyzetnek. A `bc-check` **nem** fut újra itt: az utolsó taggelt minor
+  verzióhoz mér, ami tagelés pillanatában épp ez a tag — a kiadást hasonlítaná önmagához.
+    - Teszt pinneli, hogy a kapu és a changelog-ellenőrzés **a kiadást létrehozó lépés előtt** fut.
+      Mögötte decoráció lenne; mutációval ellenőrizve.
+    - `SECURITY.md` — privát advisory, és **megnevezi a határt** a gesztus helyett: a
+      `FieldPermissions` és az egyetlen nyers SQL-kifejezés az egyik oldalon, a másikon az a kettő,
+      ami szándékosan *nem* határ (az `allowedWhen()` elrejt, de nem jogosít; a payload nyilvános
+      adat).
+    - `CONTRIBUTING.md` — a Docker-only parancstábla, a kapu, a tesztekkel kikényszerített
+      szabályok (kétszeres dokumentáció vagy `@internal`, a felület-feljegyzés, a séma nem ebben a
+      repóban él), és a kiadás menete. Mindkettő `export-ignore`.
+    - `CODEOWNERS`, `dependabot.yml` (`github-actions` + `composer`), issue-sablonok és PR-sablon.
+      A dependabotnál két kihagyás **állítás**: az `illuminate/*` majorokat azért hagyja békén,
+      mert a támogatott Laravel-majorok köre kiadási döntés, aminek ugyanabban a commitban kell
+      átírnia mindkét README követelmény-listáját; `docker` bejegyzés pedig azért nincs, mert az
+      alap-image PHP-verziója a CI-mátrix lokális fele — egy bot, ami 8.5-öt javasol, miközben a
+      mátrix 8.4-nél véget ér, teszteletlen állítást javasolna.
+    - Az issue-sablonok a **két csomag közti határra** kérdeznek rá: a hibabejelentő a kiadott
+      payloadot kéri (ez választja szét, melyik oldal hibája), a `config.yml` pedig a renderelési
+      hibákat az Aura repójába, a szerződés-hibákat az aura-schemába irányítja.
+
 - **PHP 8.5 a CI-mátrixban (audit P7).** A mátrix hat ág: 8.3 / 8.4 / 8.5 × Laravel 12 / 13. Mind a
   hatot végigfuttattuk lokálisan is, PHP-verziónként külön image-ben, a CI lépéseivel (Pint,
   PHPStan `max`, Pest): **391 teszt / 1527 assertion, ágonként zölden**. A lefedettség-mérés a 8.4-es

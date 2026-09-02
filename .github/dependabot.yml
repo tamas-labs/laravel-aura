@@ -1,0 +1,39 @@
+version: 2
+
+updates:
+    # The workflows pin third-party actions by major tag, which never moves on
+    # its own. This is the only thing here that watches them.
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+      commit-message:
+          prefix: ci
+
+    # `composer.lock` is not committed (library convention), so there is no lock
+    # to bump: what arrives here are changes to the *constraints* in
+    # composer.json. For a library that is the interesting case — a dev tool that
+    # has moved to a major nobody has allowed yet — and the noisy one, a patch
+    # release inside an existing range, cannot happen at all.
+    - package-ecosystem: composer
+      directory: /
+      schedule:
+          interval: weekly
+      versioning-strategy: widen
+      commit-message:
+          prefix: deps
+      ignore:
+          # Which Laravel majors this package supports is a release decision, not
+          # a dependency bump: adding one is a minor version here and dropping
+          # one is a major. Both belong in a commit that also edits the
+          # requirement lists in the two READMEs, which a bot cannot write.
+          - dependency-name: illuminate/*
+            update-types: ['version-update:semver-major']
+          # Resolved through the `repositories` VCS entry rather than Packagist,
+          # and its constraint tracks `AuraContract::VERSION` — a contract
+          # decision with its own tests, not something to bump on a schedule.
+          - dependency-name: tamas-labs/aura-schema
+
+# No `docker` entry on purpose. The base image's PHP version is the local half of
+# the CI matrix, so it moves when the matrix does — a bot proposing 8.5 while the
+# matrix still ends at 8.4 would be proposing an untested claim.

@@ -1,0 +1,47 @@
+name: Bug report
+description: Something this package emits, validates or refuses is wrong.
+labels: ['bug']
+
+body:
+    - type: markdown
+      attributes:
+          value: |
+              This package writes a JSON contract; the [Aura Vue table](https://github.com/tamas-labs/aura)
+              reads it. Most reports are clearly one side or the other, and the payload below is
+              what tells them apart — please include it even when the symptom is visual.
+
+    - type: textarea
+      id: what-happened
+      attributes:
+          label: What happened
+          description: What you expected, and what you got instead.
+      validations:
+          required: true
+
+    - type: textarea
+      id: table
+      attributes:
+          label: The table definition
+          description: The smallest `AuraTable` subclass that shows it — `columns()` at least.
+          render: php
+      validations:
+          required: true
+
+    - type: textarea
+      id: payload
+      attributes:
+          label: The emitted payload
+          description: >
+              What `respond()` returned, or the part of it that matters (`header.rows`,
+              `body.columnConfigs`, one row). Trim it, but do not retype it — an empty object and
+              an empty array are different things in this contract.
+          render: json
+
+    - type: input
+      id: versions
+      attributes:
+          label: Versions
+          description: PHP, Laravel, this package (a tag or a commit), and the Aura version reading the payload.
+          placeholder: 'PHP 8.4.3, Laravel 12.20, laravel-aura 1.0.0, @tamas-labs/aura 1.0.0'
+      validations:
+          required: true

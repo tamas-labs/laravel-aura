@@ -1734,6 +1734,21 @@ revíziókat hasonlít össze — a repót egy ideiglenes könyvtárba klónozza
 láthatatlan neki —, és szüksége van a tagekre, ezért klónozza a CI-job a teljes history-t a sekély
 alapértelmezett helyett.
 
+**Közreműködés és bejelentés.** A [CONTRIBUTING.md](./CONTRIBUTING.md) abban a formában gyűjti
+össze a fentieket, amire egy első változtatásnak szüksége van: a parancstábla, amit egy pull
+requestnek vinnie kell, és a kiadás menete. A [SECURITY.md](./SECURITY.md) a sérülékenységekről
+szól, és megnevezi azt a két szabályt, ami a határ (a `FieldPermissions` és az egyetlen nyers
+SQL-kifejezés) — meg azt a kettőt, ami szándékosan **nem**: az `allowedWhen()` elrejt egy cellát,
+de nem jogosít, és minden kiadott payload nyilvános adat.
+
+**A kiadás egy tag, és a tag az utolsó lépés.** A Composer a git tagből telepít egy csomagot, tehát
+nincs mit publikálni és nincs mit megszakítani: mire a
+[`.github/workflows/release.yml`](./.github/workflows/release.yml) elindul, a kiadás már létezik.
+Amit csinál: újrafuttatja a kaput a lefedettségi változatával, elutasít egy olyan taget, aminek
+nincs saját dátumozott `CHANGELOG.md` szakasza — a manifest nem visz `version` kulcsot, tehát a
+változásnapló az egyetlen feljegyzés, amihez egy tag mérhető —, és azt a szakaszt teszi ki
+kiadási jegyzetnek.
+
 **A dokumentáció a kapu része.** A `tests/DocsCoverageTest.php` végigmegy reflexióval a `src/`
 minden osztályán, és elbukik, ha egy publikus metódust egyik teljes referencia sem említ — vagy ha
 csak az egyik, mert az angol és a magyar szöveg így csúszik szét. Ami kimarad ebből a

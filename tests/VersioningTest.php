@@ -54,15 +54,15 @@ function auraManifest(): array
 }
 
 /**
- * The CI workflow, parsed.
+ * One GitHub Actions workflow, parsed.
  *
  * @return array<string, mixed>
  */
-function auraWorkflow(): array
+function auraWorkflow(string $file = 'ci.yml'): array
 {
-    $contents = file_get_contents(__DIR__.'/../.github/workflows/ci.yml');
+    $contents = file_get_contents(__DIR__.'/../.github/workflows/'.$file);
 
-    Assert::assertNotFalse($contents, 'Cannot read .github/workflows/ci.yml');
+    Assert::assertNotFalse($contents, "Cannot read .github/workflows/{$file}");
 
     $workflow = Yaml::parse($contents);
 
@@ -272,6 +272,42 @@ it('installs the compatibility checker on its own, never beside the package', fu
         $commands,
         'The bc-check script installs the checker somewhere other than its own directory',
     );
+});
+
+it('gates the release before it creates one', function () {
+    // A Composer package is installed from its git tag, so the tag *is* the
+    // release and it is public before this workflow starts. What is left to
+    // protect is the record: the gate, and the refusal to release a tag whose
+    // notes are still sitting under `[Unreleased]`. Both have to run before the
+    // step that publishes the release notes, or they are decoration.
+    $release = auraWorkflow('release.yml');
+
+    expect(array_keys(auraDigArray($release, 'on')))->toBe(['push'])
+        ->and(auraDigArray($release, 'on', 'push'))->toHaveKey('tags');
+
+    $gate = null;
+    $changelog = null;
+    $publish = null;
+
+    foreach (auraDigArray($release, 'jobs', 'release', 'steps') as $index => $step) {
+        if (! is_array($step)) {
+            continue;
+        }
+
+        $run = is_string($step['run'] ?? null) ? $step['run'] : '';
+        $uses = is_string($step['uses'] ?? null) ? $step['uses'] : '';
+
+        $gate ??= str_contains($run, 'composer quality:coverage') ? $index : null;
+        $changelog ??= str_contains($run, 'CHANGELOG.md') ? $index : null;
+        $publish ??= str_starts_with($uses, 'softprops/action-gh-release') ? $index : null;
+    }
+
+    Assert::assertIsInt($gate, 'The release workflow does not run the quality gate');
+    Assert::assertIsInt($changelog, 'The release workflow does not check the tag against CHANGELOG.md');
+    Assert::assertIsInt($publish, 'The release workflow creates no GitHub Release');
+
+    expect($gate)->toBeLessThan($publish)
+        ->and($changelog)->toBeLessThan($publish);
 });
 
 it('points at the package it lives in', function () {

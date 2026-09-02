@@ -1,0 +1,16 @@
+blank_issues_enabled: false
+
+contact_links:
+    - name: The browser draws it wrong
+      url: https://github.com/tamas-labs/aura/issues
+      about: >
+          Rendering, sorting in the table, the toolbar, a cell that looks wrong — that is the Vue
+          package. If the payload is right, the report belongs there.
+
+    - name: The contract itself is wrong
+      url: https://github.com/tamas-labs/aura-schema/issues
+      about: A schema document that describes something other than what Aura actually does.
+
+    - name: Report a vulnerability
+      url: https://github.com/tamas-labs/laravel-aura/security/advisories/new
+      about: Privately, never as a public issue. See SECURITY.md.

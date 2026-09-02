@@ -1,0 +1,4 @@
+# One maintainer, every path. The value is not review routing but the request
+# itself: GitHub asks for a review on every pull request, including one opened
+# from a fork.
+* @tamas-labs

@@ -1,0 +1,70 @@
+name: Release
+
+on:
+    push:
+        tags:
+            - 'v*.*.*'
+
+permissions:
+    contents: read
+
+jobs:
+    release:
+        name: Quality gate + GitHub Release
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: write # to create the GitHub Release
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  extensions: mbstring, zip, intl, pdo_sqlite
+                  ini-values: memory_limit=-1
+                  coverage: pcov
+
+            # composer.lock is not committed (this is a library), so update, not install.
+            - name: Install dependencies
+              run: composer update --prefer-dist --no-interaction --no-progress
+
+            # Nothing is published from here. Composer installs a package from its
+            # git tag, so the tag *is* the release, and it is already public by the
+            # time this runs — there is no publish step to abort. That makes the
+            # gate worth re-running rather than a formality: a red run here is the
+            # signal to tag again, and the matrix has already covered the commit.
+            - name: Quality gate
+              run: composer quality:coverage
+
+            # The manifest carries no `version` key (the tag is the version), so the
+            # changelog is the only thing in the repository a tag can be checked
+            # against. A tag whose notes are still sitting under `[Unreleased]` is a
+            # release nobody wrote down.
+            - name: Verify the tag has a changelog entry
+              id: changelog
+              run: |
+                  version="${GITHUB_REF_NAME#v}"
+
+                  if ! grep -qE "^## \[${version}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+                      echo "CHANGELOG.md has no '## [${version}] - YYYY-MM-DD' section for tag ${GITHUB_REF_NAME}." >&2
+                      echo "Move [Unreleased] into a dated section, commit, and tag again." >&2
+                      exit 1
+                  fi
+
+                  {
+                      echo 'notes<<CHANGELOG_SECTION'
+                      awk -v heading="## [${version}]" '
+                          index($0, heading) == 1 { found = 1; next }
+                          found && /^## / { exit }
+                          found { print }
+                      ' CHANGELOG.md
+                      echo 'CHANGELOG_SECTION'
+                  } >>"$GITHUB_OUTPUT"
+
+            - name: Create the GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  body: ${{ steps.changelog.outputs.notes }}

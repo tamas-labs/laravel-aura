@@ -185,6 +185,11 @@ One service, no database container — the suite runs on in-memory SQLite.
 
 📝 **[CHANGELOG.md](./CHANGELOG.md)** — change history.
 
+🤝 **[CONTRIBUTING.md](./CONTRIBUTING.md)** — local setup, the gates a change has to pass, how a
+release is cut.
+
+🔒 **[SECURITY.md](./SECURITY.md)** — reporting a vulnerability, and what the boundary actually is.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
