@@ -1646,6 +1646,7 @@ difference between an empty object and an empty array, and JSON Schema cares abo
 docker compose run --rm php composer install     # install dependencies
 docker compose run --rm php composer quality     # pint + phpstan + pest — what CI runs
 docker compose run --rm php vendor/bin/pest      # the test suite
+docker compose run --rm php composer test:coverage   # the suite, with the coverage floor
 docker compose run --rm php vendor/bin/pest --filter "clamps paginate"
 docker compose run --rm php vendor/bin/phpstan analyse
 docker compose run --rm php vendor/bin/pint      # apply formatting
@@ -1657,6 +1658,19 @@ in-memory SQLite, so `docker compose up` is never needed.
 The quality gate is Laravel Pint (`laravel` preset), PHPStan/Larastan at level **max** over `src/`,
 `tests/` and `workbench/`, and Pest. CI runs the matrix natively (PHP 8.3/8.4 × Laravel 12/13) and
 separately builds this image so the Dockerfile cannot rot.
+
+**Coverage has a floor, and the floor is the gate.** `composer test:coverage` runs the suite with
+`--min=90`, which fails the run below that number rather than printing a report nobody reads. The
+threshold is not in `phpunit.xml` because PHPUnit has no fail-under of its own — Pest's `--min` is
+the mechanism. The image carries **pcov** rather than Xdebug (the only thing wanted here is the
+line count, and pcov measures it far more cheaply), restricted by `pcov.directory` to the same
+`src/` that `phpunit.xml` declares, so neither `vendor/` nor the tests are instrumented. CI measures
+once, on the newest supported pair — the number does not differ per matrix leg.
+
+The nine points between the floor and 100 are almost entirely the fluent setters: one-line
+`return $this->set('align', $align)` methods on the cell types and their traits, documented but
+never called by a test. They are the surface the contract's 73 property names live on, and a guard
+that every setter emits the slot it claims is worth more than the coverage number it would move.
 
 **The documentation is part of the gate.** `tests/DocsCoverageTest.php` reflects over every class
 under `src/` and fails when a public method is mentioned in neither full reference — or in only one
@@ -1720,7 +1734,7 @@ package's autoload.
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).
 
 ## Author
 

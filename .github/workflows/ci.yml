@@ -23,6 +23,12 @@ jobs:
                       testbench: '^10.0'
                     - laravel: '13'
                       testbench: '^11.0'
+                    # Coverage is measured once, on the newest supported pair.
+                    # The number does not differ per leg — the suite is the
+                    # same — and pcov on all four would only cost time.
+                    - php: '8.4'
+                      laravel: '13'
+                      coverage: 'pcov'
 
         steps:
             - uses: actions/checkout@v4
@@ -33,7 +39,7 @@ jobs:
                   php-version: ${{ matrix.php }}
                   extensions: mbstring, zip, intl, pdo_sqlite
                   ini-values: memory_limit=-1
-                  coverage: none
+                  coverage: ${{ matrix.coverage || 'none' }}
 
             - name: Pin the Laravel version under test
               run: |
@@ -53,7 +59,14 @@ jobs:
               run: vendor/bin/phpstan analyse --no-progress
 
             - name: Tests
+              if: matrix.coverage == ''
               run: vendor/bin/pest
+
+            # `--min` fails the run below the threshold, so the gate is the
+            # number itself and not a report nobody reads.
+            - name: Tests with coverage
+              if: matrix.coverage != ''
+              run: composer test:coverage
 
     docker:
         name: Docker image

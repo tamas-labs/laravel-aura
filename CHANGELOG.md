@@ -8,6 +8,26 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **`LICENSE` fájl és a Packagist-metaadatok (audit P1 + P9).** A `composer.json` eddig is
+  `"license": "MIT"`-et állított, de a szövege hiányzott a repóból — egy telepített másolat így
+  licenc nélkül érkezett volna. Mellé a `homepage` és a `support.issues` / `support.source`, amiket
+  a Packagist a csomagoldalon megjelenít. A `tests/VersioningTest.php` két új őrrel köti a
+  metaadatot a valósághoz: az egyik azt bizonyítja, hogy a fájl létezik, MIT, és hogy a
+  `.gitattributes` **nem** `export-ignore`-olja (ez az a hiba, amit csak a kiadott csomagban lehetne
+  észrevenni), a másik azt, hogy a három URL a csomag saját repójára mutat. Mindhárom README licenc-
+  szakasza mostantól a fájlra hivatkozik, nem csak annyit mond, hogy „MIT".
+
+- **Lefedettség-mérés küszöbbel (audit P4).** Az image mostantól **pcov**-ot visz (nem Xdebugot: itt
+  egyedül a sorszámlálás a cél), a `pcov.directory` ugyanarra a `src/`-re szűkítve, amit a
+  `phpunit.xml` is deklarál — a `vendor/` és a tesztek nincsenek műszerezve. Új script:
+  `composer test:coverage` (`pest --coverage --min=90`) és `composer quality:coverage`. A küszöb
+  **nem** a `phpunit.xml`-be került, ahogy az audit javasolta, mert a PHPUnit-nak nincs saját
+  fail-under mechanizmusa — a Pest `--min` kapcsolója az, ami a szám alatt elbuktatja a futást. A CI
+  egyszer mér, a legfrissebb támogatott páron (PHP 8.4 / Laravel 13); a szám mátrixáganként nem tér
+  el, négyszer mérni csak idő. **A mai érték 91,1 %**, és a hiányzó rész szinte teljes egészében a
+  fluent setterek: egysoros `return $this->set(…)` metódusok, amiket a dokumentáció leír, de teszt
+  sosem hív.
+
 - **Kimondott verzió-ígéret (F6.4).** Új *Verziózás* / *Versioning* szakasz mindkét teljes
   referenciában, plusz a `tests/VersioningTest.php` őr, ami a szöveget a kódhoz köti.
     - **Három verziószám találkozik itt, és a kompatibilitást a középső dönti el**: a csomagé

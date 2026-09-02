@@ -9,12 +9,17 @@
     ],
     "license": "MIT",
     "type": "library",
+    "homepage": "https://github.com/tamas-labs/laravel-aura",
     "authors": [
         {
             "name": "Tamas Labs",
             "email": "tbalint78@gmail.com"
         }
     ],
+    "support": {
+        "issues": "https://github.com/tamas-labs/laravel-aura/issues",
+        "source": "https://github.com/tamas-labs/laravel-aura"
+    },
     "require": {
         "php": "^8.3",
         "illuminate/console": "^12.0 || ^13.0",
@@ -66,10 +71,16 @@
         "format": "pint",
         "analyse": "phpstan analyse",
         "test": "pest",
+        "test:coverage": "pest --coverage --min=90",
         "quality": [
             "@lint",
             "@analyse",
             "@test"
+        ],
+        "quality:coverage": [
+            "@lint",
+            "@analyse",
+            "@test:coverage"
         ],
         "build": "@php vendor/bin/testbench workbench:build --ansi",
         "serve": [

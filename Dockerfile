@@ -11,11 +11,18 @@ FROM php:8.4-cli-alpine
 RUN apk add --no-cache git unzip icu-libs libzip \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev libzip-dev \
     && docker-php-ext-install -j"$(nproc)" intl zip \
+    && pecl install pcov \
+    && docker-php-ext-enable pcov \
     && apk del .build-deps
+
+# pcov rather than Xdebug: the only thing coverage is wanted for here is the
+# line count, and pcov measures it at a fraction of the cost. Restricted to the
+# sources phpunit.xml also declares, so vendor and tests are never instrumented.
+RUN printf 'pcov.directory=/package/src\n' > /usr/local/etc/php/conf.d/zz-pcov.ini
 
 # mbstring and pdo_sqlite ship with the official image; intl and zip are built
 # above. Fail the build rather than discovering a missing extension in a test run.
-RUN php -r 'foreach (["mbstring", "zip", "intl", "pdo_sqlite"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "missing extension: $ext\n"); exit(1); } }'
+RUN php -r 'foreach (["mbstring", "zip", "intl", "pdo_sqlite", "pcov"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "missing extension: $ext\n"); exit(1); } }'
 
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 

@@ -187,7 +187,7 @@ One service, no database container — the suite runs on in-memory SQLite.
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).
 
 ## Author
 

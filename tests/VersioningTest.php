@@ -118,6 +118,50 @@ it('leaves the package version to the git tag', function () {
     expect(auraManifest())->not->toHaveKey('version');
 });
 
+it('ships the licence its manifest claims', function () {
+    // Three separate things have to agree, and only the first is obvious.
+    // `composer.json` names an SPDX identifier, the file has to be that
+    // licence, and `.gitattributes` decides whether the file is in the dist at
+    // all — an `export-ignore` here would leave every installed copy unlicensed
+    // while the manifest went on claiming MIT.
+    $path = __DIR__.'/../LICENSE';
+
+    // Asserted before the read: `file_get_contents()` on a missing file raises
+    // a warning the test runner turns into an exception, and the failure would
+    // name the read rather than the absent licence.
+    Assert::assertFileExists($path, 'The package has no LICENSE file');
+
+    $licence = file_get_contents($path);
+
+    Assert::assertNotFalse($licence);
+    Assert::assertStringContainsString('MIT License', $licence);
+    Assert::assertStringContainsString('tamas-labs', $licence);
+
+    expect(auraDig(auraManifest(), 'license'))->toBe('MIT');
+
+    $attributes = file_get_contents(__DIR__.'/../.gitattributes');
+
+    Assert::assertNotFalse($attributes, 'Cannot read .gitattributes');
+    Assert::assertDoesNotMatchRegularExpression(
+        '/^\/?LICENSE\s+export-ignore/m',
+        $attributes,
+        'LICENSE is export-ignored, so the published package would carry no licence text',
+    );
+});
+
+it('points at the package it lives in', function () {
+    // Packagist reads these; a package page with no issue tracker sends its
+    // first bug report to the author's inbox, or nowhere.
+    $manifest = auraManifest();
+
+    foreach ([['homepage'], ['support', 'issues'], ['support', 'source']] as $path) {
+        $url = auraDig($manifest, ...$path);
+
+        Assert::assertIsString($url, 'composer.json is missing '.implode('.', $path));
+        expect($url)->toStartWith('https://github.com/tamas-labs/laravel-aura');
+    }
+});
+
 it('names the Vue package on the other end of the contract', function () use ($readmes) {
     foreach ($readmes as $readme) {
         expect(auraReadme($readme))->toContain('@tamas-labs/aura`');
