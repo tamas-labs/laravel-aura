@@ -43,6 +43,17 @@ final class ContractValidator
     }
 
     /**
+     * Validate one batch of reported errors — what Aura POSTs to the ingest
+     * endpoint.
+     *
+     * @param  mixed  $payload  Typically the decoded request body.
+     */
+    public static function errorReport(mixed $payload): ContractResult
+    {
+        return self::validate($payload, 'aura-error-report.schema.json');
+    }
+
+    /**
      * Validate against one document of the contract.
      *
      * @param  string  $document  File name relative to the schema directory.

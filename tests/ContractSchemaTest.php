@@ -20,6 +20,52 @@ it('accepts the request example shipped with the contract', function (): void {
     assertMatchesAuraRequestSchema(auraJsonFile(AuraSchema::examplePath('request')));
 });
 
+it('accepts the error report example shipped with the contract', function (): void {
+    assertMatchesAuraErrorReportSchema(auraJsonFile(AuraSchema::examplePath('error-report')));
+});
+
+it('rejects an error entry with no severity', function (): void {
+    // The one field a receiver cannot infer: without it there is no way to tell
+    // a dropped validation warning from a failed request.
+    $result = ContractValidator::errorReport((object) [
+        'errors' => [
+            (object) [
+                'level' => 'warning',
+                'timestamp' => '2026-09-02T12:00:00.000Z',
+                'component' => 'HeaderValidator',
+                'action' => 'validate',
+                'type' => 'validation',
+                'message' => 'Invalid header structure in API response',
+            ],
+        ],
+    ]);
+
+    expect($result->valid)->toBeFalse()
+        ->and(implode("\n", $result->issues))->toContain('severity');
+});
+
+it('accepts an error entry carrying a field the contract does not know', function (): void {
+    // `additionalProperties: true` on the entry is deliberate (D7): the Aura
+    // payload may grow a `storeId`, and a receiver that rejects the batch over
+    // it would reject it forever — every non-2xx answer is retried and requeued.
+    $result = ContractValidator::errorReport((object) [
+        'errors' => [
+            (object) [
+                'severity' => 'warning',
+                'level' => 'warning',
+                'timestamp' => '2026-09-02T12:00:00.000Z',
+                'component' => 'HeaderValidator',
+                'action' => 'validate',
+                'type' => 'validation',
+                'message' => 'Invalid header structure in API response',
+                'storeId' => 'users-table',
+            ],
+        ],
+    ]);
+
+    expect($result->valid)->toBeTrue($result->report());
+});
+
 it('resolves every schema document offline', function (): void {
     // A `$ref` the resolver cannot answer throws rather than validating false,
     // so a green contract test can never mean "schema not found".

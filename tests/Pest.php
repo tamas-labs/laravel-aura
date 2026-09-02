@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Http\Request;
+use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Assert;
 use TamasLabs\Aura\Cell\CellRules;
 use TamasLabs\Aura\Table\AuraTable;
@@ -44,6 +45,37 @@ function assertMatchesAuraRequestSchema(mixed $payload): void
         $result->valid,
         'Payload does not match the Aura request schema:'.$result->report()
     );
+}
+
+/**
+ * Assert that a payload is one Aura would POST to the error-ingest endpoint.
+ */
+function assertMatchesAuraErrorReportSchema(mixed $payload): void
+{
+    $result = ContractValidator::errorReport($payload);
+
+    Assert::assertTrue(
+        $result->valid,
+        'Payload does not match the Aura error report schema:'.$result->report()
+    );
+}
+
+/**
+ * `artisan()` is typed `PendingCommand|int` — it answers an `int` once the
+ * command has run. Narrowing once here keeps every call site readable.
+ *
+ * Shared rather than per-file: two suites now drive Artisan, and a helper
+ * declared twice at file scope is a fatal redeclaration, not a shadowed copy.
+ *
+ * @param  array<string, mixed>  $arguments
+ */
+function auraArtisan(string $command, array $arguments = []): PendingCommand
+{
+    $pending = Pest\Laravel\artisan($command, $arguments);
+
+    Assert::assertInstanceOf(PendingCommand::class, $pending);
+
+    return $pending;
 }
 
 /**

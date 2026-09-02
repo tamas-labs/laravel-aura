@@ -53,6 +53,16 @@ fields the query will accept come out of the same definition, so they cannot dri
   - [AuraQuery](#auraquery)
   - [AuraPayload](#aurapayload)
 - [Exceptions](#exceptions)
+- [Error reporting](#error-reporting)
+  - [Switching it on](#switching-it-on)
+  - [What arrives](#what-arrives)
+  - [What is answered](#what-is-answered)
+  - [Configuration](#configuration-1)
+  - [Storing](#storing)
+  - [Somewhere else entirely](#somewhere-else-entirely)
+  - [Reading it back](#reading-it-back)
+  - [What you will see](#what-you-will-see)
+  - [What this is not](#what-this-is-not)
 - [The wire contract](#the-wire-contract)
 - [Versioning](#versioning)
   - [What semver covers](#what-semver-covers)
@@ -1514,6 +1524,205 @@ Every exception this package raises on its own behalf implements
 
 These all report a mistake in the **table definition**, never in the client's input — malformed
 input fails validation and becomes a 422 long before it reaches them.
+
+---
+
+## Error reporting
+
+Aura can POST **its own error log** to an endpoint — every schema violation it found in the JSON
+this package generated, named field by field, with the value it rejected. This section is the
+endpoint. It is off until you switch it on.
+
+The argument for having it here rather than in the host application is short: the errors that
+matter most are the ones `laravel-aura` **causes**. When a table definition emits a header cell the
+contract does not allow, the browser knows exactly which key and which value; the server knows
+nothing at all. With the ingest on, `php artisan aura:errors` answers *which of my table
+definitions is breaking the contract*.
+
+### Switching it on
+
+```dotenv
+AURA_ERRORS_ENABLED=true
+```
+
+That is the whole server side under the default `log` driver — no table, no queue, no migration.
+The route is registered at `aura/errors`; nothing exists until the flag is true, because a
+telemetry endpoint should not appear merely because someone ran `composer require`.
+
+Then point Aura at it, in the host application's plugin config:
+
+```js
+app.use(Aura, {
+    errorReporting: true,
+    errorReportingEndpoint: '/aura/errors',
+});
+```
+
+> **Never put a secret in `errorReportingApiKey`.** Aura sends it as `Authorization: Bearer …`
+> from the browser, so it is readable by anyone who opens the network tab. It can identify a
+> deployment; it cannot authenticate one. Server-side authorisation belongs in the `middleware`
+> list.
+
+### What arrives
+
+A batch, and nothing else:
+
+```json
+{ "errors": [ { "severity": "warning", "level": "warning", "timestamp": "…",
+                "component": "HeaderValidator", "action": "validate", "type": "validation",
+                "message": "…", "key": "header", "details": "…", "metadata": { … } } ] }
+```
+
+Between 1 and 100 entries per request. Aura flushes every 30 seconds, or as soon as ten errors
+have piled up, and it sends the **whole** queue rather than a batch-sized slice. The shape is the
+`aura-error-report` document of the contract; `assertMatchesAuraErrorReportSchema()` validates
+against it.
+
+Four facts about the client decide everything on this side:
+
+- **It uses a native `fetch()` and sends no CSRF token.** The `web` middleware group would answer
+  419 — forever, see below. The packaged `middleware` default is `['throttle:60,1']`, and `web`
+  must not be added to it.
+- **Every non-2xx answer is a failure.** The batch is retried four times (1 s, 2 s, 3 s apart),
+  then put back at the *front* of the queue and repeated behind an exponential backoff, up to five
+  minutes. A 422 over one malformed entry is therefore not a message to a developer — it is an
+  unrepeatable request repeated forever.
+- **Nothing is bounded on the way out.** A `HeaderValidator` entry carries the whole rejected
+  `header` section in `metadata.receivedValue`; the client applies no size limit to it, and a
+  batch may hold a hundred of them.
+- **Nothing identifies the table.** There is no `storeId`, no URL and no version field in the
+  payload. `key` and `component` are the most precise identification available; the rest is
+  approximated server-side from `Referer`, `User-Agent` and the session.
+
+### What is answered
+
+| Status | When |
+| --- | --- |
+| `202 Accepted` | the normal answer — **including when entries were dropped**. The body reports `received`, `stored`, `dropped` and the first few `reasons`. |
+| `413` | the body was over `max_payload`. Spent knowingly: the client cannot send a smaller batch, but the alternative is an unbounded body from a browser. |
+| `429` | from the `throttle` middleware, which the client's own backoff handles correctly. |
+
+A malformed entry is dropped and the rest are stored. That is not leniency; it is the only answer
+that terminates.
+
+### Configuration
+
+Every key lives under `aura.errors`:
+
+| Key | Default | What it decides |
+| --- | --- | --- |
+| `enabled` | `env('AURA_ERRORS_ENABLED', false)` | whether the route exists at all |
+| `path` | `aura/errors` | where it is registered |
+| `middleware` | `['throttle:60,1']` | what it runs behind — never `web` |
+| `driver` | `log` | `log` or `database` |
+| `channel` | `null` | log channel for the `log` driver |
+| `table` | `aura_errors` | table for the `database` driver |
+| `max_payload` | `1048576` | request body ceiling, in bytes → `413` |
+| `max_entries` | `100` | entries kept from one batch; the rest are dropped, not rejected |
+| `metadata.store` | `true` | whether `metadata` is stored at all |
+| `metadata.max_bytes` | `8192` | encoded bytes of `metadata` kept per entry |
+| `queue` | `false` | whether the write is pushed onto the queue |
+
+**`metadata` is the key worth a decision.** It is the one field that can carry what a user typed:
+`SessionStateValidator` reports the persisted session state, which holds their search terms and
+filter values. Over `max_bytes` the value is replaced by a marker naming its size and its keys —
+the entry is never dropped, because an oversized `receivedValue` is exactly the case worth knowing
+about.
+
+### Storing
+
+`log` is the default and writes one line per record, at the entry's own severity — which is
+already a PSR-3 level name, so the host's existing log routing applies unchanged. What it cannot
+do is deduplicate.
+
+`database` can. It needs the migration:
+
+```bash
+php artisan vendor:publish --tag=aura-error-migrations
+php artisan migrate
+```
+
+Published rather than loaded on purpose: a library that generates JSON and a library that creates
+a table on your database are different promises, and the second one should be asked for.
+
+Every write is keyed on a **fingerprint** —
+`sha256(key|component|action|type|message|timestamp)`, from
+`AuraErrorRecord::fingerprint()` — with a unique index behind it. The same batch delivered four
+times leaves one row. This is not an edge case: it is what the client does after any non-2xx
+answer.
+
+The row keeps **two counters, and they are not the same number**:
+
+- `occurrences` — the client's. How often the error happened in one browser, as Aura's own store
+  merged it. A repeat delivery takes the higher of the two, never the sum.
+- `receipts` — the server's. How often this entry arrived, retries included.
+
+Conflating them would turn a retried batch into a spike of user-visible errors.
+
+Beside them the row carries what the payload does not say: `received_at`, `ip`, `user_agent`,
+`referer` and `user_id` — each an approximation, and each worth what its source is worth. The
+`user_id` is known only on a same-origin request, where the native `fetch()` sends the session
+cookie.
+
+`AuraErrorRecord::occurredAt()` and `AuraErrorRecord::lastOccurredAt()` parse the client's ISO
+timestamps, answering `null` for anything a browser clock produced that is not a date.
+
+**Retention is the host application's.** The package writes; it does not prune. Schedule a delete
+against the table if you want a window:
+
+```php
+Schedule::call(fn () => DB::table('aura_errors')->where('last_received_at', '<', now()->subDays(30))->delete())
+    ->daily();
+```
+
+### Somewhere else entirely
+
+Bind your own implementation of `TamasLabs\Aura\Errors\ErrorStore` — one method, `store()`, handed
+the records and answering how many landed:
+
+```php
+$this->app->bind(ErrorStore::class, fn () => new SentryErrorStore);
+```
+
+An implementation **must not throw**. The endpoint answers `202` whatever happens to the batch,
+because Aura re-sends anything else forever; an exception here would turn a storage hiccup into an
+unkillable retry loop.
+
+### Reading it back
+
+```bash
+php artisan aura:errors --limit=20 --key=header --severity=warning
+```
+
+One row per `key`, newest first, with both counters and the component that emitted it. Grouped by
+`key` rather than by `message` because the message is rendered through Aura's `labels` and changes
+with the host's language; the key does not. It reads rows, so it needs the `database` driver —
+under `log` it says so rather than printing an empty table, which would look like good news.
+
+### What you will see
+
+Aura's own emitters. A host application can report anything else through its own `addError`.
+
+| `component` | `action` | `type` | `severity` | When |
+| --- | --- | --- | --- | --- |
+| ~32 `*Validator` (`HeaderValidator`, `BodyValidator`, `BooleanValidator`, …) | `validate` | `validation` | `warning` | a config or response field does not match the schema — **these are the ones this package causes** |
+| `ApiResourcesStore` | `fetchData` | `api` | `error` | the request failed; `metadata.kind` is `network` / `timeout` / `client` / `server` / `unknown`, beside `status` and `code` |
+| `ApiResourcesStore` | `fetchData` | `validation` | `error` | the response arrived but produced no state |
+| `ApiResourcesStore` | `fetchData` | `authorization` | `error` | a cross-origin request was blocked (`allowExternalApi`) — the full URL is in the message |
+| `CoreStore` | `read` | `client` | `warning` | a child component read the store before the root created it (a wiring mistake) |
+| `DestroyModal` | `submitDestroyForm` | `authorization` | `warning` | a cross-origin destroy route was blocked |
+| `resolveConditionalConfig` | `resolve` | `validation` | `warning` | a conditional config nested too deeply — key `conditionalConfig.maxDepth` |
+| `ErrorReporter` | `report` | `network` | `info` | the reporter itself failed or dropped — keys `errorReporting.failed`, `errorReporting.dropped` |
+| `ErrorHandlerStore` | `addError` | `unknown` | `info` | the store's own 50-entry limit filled — key `errorHandler.limitReached` |
+
+The `*Validator` rows are the ones to act on here: each is a concrete defect in the JSON this
+package generated, with the field name in `key`.
+
+### What this is not
+
+**The payload is telemetry, not evidence.** It arrives from a browser, unauthenticated by design,
+and anyone who can reach the route can post anything into your log or table. Rate-limit it, and do
+not build alerting that treats a row as proof of anything.
 
 ---
 

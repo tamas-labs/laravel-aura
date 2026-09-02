@@ -1,0 +1,79 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * The table the `database` error-ingest driver writes to.
+ *
+ * Two things in here are load-bearing rather than decorative:
+ *
+ * - **`fingerprint` is unique.** Aura re-sends a batch after any non-2xx
+ *   answer, four times and then again behind a backoff, so the same entries
+ *   arrive repeatedly; without this index the table would end up measuring the
+ *   endpoint's own outages.
+ * - **`occurrences` and `receipts` are two different numbers.** The first is
+ *   the client's: how many times the error happened in one browser, as Aura's
+ *   own store merged them. The second is the server's: how many times this
+ *   entry was received. A retried batch moves the second and leaves the first
+ *   alone.
+ *
+ * The column is `error_key`, not `key`: `key` is reserved in MySQL, and a
+ * column that only works because the query builder quotes it is a trap for the
+ * first hand-written query.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create($this->table(), function (Blueprint $table): void {
+            $table->id();
+
+            $table->string('fingerprint', 64)->unique();
+
+            $table->string('severity', 16)->index();
+            $table->string('type', 32);
+            $table->string('component');
+            $table->string('action');
+            $table->string('error_key')->nullable()->index();
+
+            $table->text('message');
+            $table->text('details')->nullable();
+            $table->json('metadata')->nullable();
+
+            // The client's count: occurrences in one browser.
+            $table->unsignedInteger('occurrences')->default(1);
+            // The server's count: arrivals of this entry, retries included.
+            $table->unsignedInteger('receipts')->default(1);
+
+            $table->timestamp('occurred_at')->nullable()->index();
+            $table->timestamp('last_occurred_at')->nullable();
+            $table->timestamp('received_at');
+            $table->timestamp('last_received_at');
+
+            $table->string('ip', 45)->nullable();
+            $table->string('user_agent')->nullable();
+            $table->text('referer')->nullable();
+            $table->string('user_id', 64)->nullable()->index();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists($this->table());
+    }
+
+    /**
+     * The configured table name, so publishing the migration and renaming the
+     * table stay one decision.
+     */
+    private function table(): string
+    {
+        $table = config('aura.errors.table');
+
+        return is_string($table) && $table !== '' ? $table : 'aura_errors';
+    }
+};

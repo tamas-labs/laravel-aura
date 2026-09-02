@@ -30,6 +30,10 @@ Action::set
 Action::show
 Action::title
 Action::variant
+AuraErrorRecord::fingerprint
+AuraErrorRecord::lastOccurredAt
+AuraErrorRecord::occurredAt
+AuraErrorRecord::toArray
 AuraIcon::icon
 AuraOption::label
 AuraPayload::fromPaginator
@@ -165,6 +169,8 @@ Custom::params
 Custom::renderer
 Custom::template
 Custom::value
+DatabaseErrorStore::store
+ErrorStore::store
 FieldPermissions::allowsFilter
 FieldPermissions::allowsSearch
 FieldPermissions::allowsSort
@@ -217,6 +223,7 @@ Link::target
 Link::title
 Link::value
 Link::variant
+LogErrorStore::store
 Modal::alt
 Modal::button
 Modal::content

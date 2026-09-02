@@ -144,6 +144,19 @@ The `sortable`, `searchable` and `filterable` lists have no key here because the
 sends at most one entry per field, so the column whitelist is already their exact ceiling. See
 [What bounds a request](./README.en.md#what-bounds-a-request).
 
+### Error reporting
+
+Aura can POST its own error log — every schema violation it found in the JSON this package
+generated, named field by field. The endpoint ships here, off until you ask for it:
+
+```dotenv
+AURA_ERRORS_ENABLED=true
+```
+
+`php artisan aura:errors` then answers *which of my table definitions is breaking the contract*.
+The route answers `202` even when it drops an entry, because Aura retries anything else forever;
+the whole reasoning is in [Error reporting](./README.en.md#error-reporting).
+
 ## Four things worth knowing up front
 
 **The header and the whitelist are one definition.** What the browser is offered and what the

@@ -3,31 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\File;
-use Illuminate\Testing\PendingCommand;
-
-use function Pest\Laravel\artisan;
-
 use PHPUnit\Framework\Assert;
 use TamasLabs\Aura\Cell\Text;
 use TamasLabs\Aura\Table\AuraTable;
 use TamasLabs\Aura\Tests\Fixtures\Post;
 use TamasLabs\Aura\Tests\Fixtures\TypedUser;
 use TamasLabs\Aura\Tests\Fixtures\User;
-
-/**
- * `artisan()` is typed `PendingCommand|int` — it answers an `int` once the
- * command has run. Narrowing once here keeps every call site readable.
- *
- * @param  array<string, mixed>  $arguments
- */
-function auraArtisan(string $command, array $arguments = []): PendingCommand
-{
-    $pending = artisan($command, $arguments);
-
-    Assert::assertInstanceOf(PendingCommand::class, $pending);
-
-    return $pending;
-}
 
 /**
  * Where the generator writes, inside the Testbench skeleton.

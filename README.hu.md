@@ -54,6 +54,16 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [AuraQuery](#auraquery)
   - [AuraPayload](#aurapayload)
 - [Kivételek](#kivételek)
+- [Hibajelentés fogadása](#hibajelentés-fogadása)
+  - [Bekapcsolás](#bekapcsolás)
+  - [Ami megérkezik](#ami-megérkezik)
+  - [Amit válaszol](#amit-válaszol)
+  - [Konfiguráció](#konfiguráció-1)
+  - [Tárolás](#tárolás)
+  - [Máshová, teljesen](#máshová-teljesen)
+  - [Visszaolvasás](#visszaolvasás)
+  - [Amit látni fogsz](#amit-látni-fogsz)
+  - [Ami ez nem](#ami-ez-nem)
 - [A dróton lévő szerződés](#a-dróton-lévő-szerződés)
 - [Verziózás](#verziózás)
   - [Mit fed a semver](#mit-fed-a-semver)
@@ -1535,6 +1545,206 @@ Minden kivétel, amit ez a csomag a saját nevében dob, implementálja a
 
 Mindegyik a **tábla definíciójában** lévő hibát jelent, nem a kliens inputjában lévőt — a hibás
 input jóval előbb elbukik a validáción, és 422 lesz belőle.
+
+---
+
+## Hibajelentés fogadása
+
+Az Aura képes **a saját hibalogját** POST-olni egy végpontra — minden sémasértést, amit az ebben a
+csomagban generált JSON-ben talált, mezőnként megnevezve, a visszautasított értékkel együtt. Ez a
+fejezet az a végpont. Alapból ki van kapcsolva.
+
+Az érv amellett, hogy ez itt legyen és ne a hoszt alkalmazásban: a legfontosabb hibákat a
+`laravel-aura` **okozza**. Amikor egy tábladefiníció olyan fejléccellát bocsát ki, amit a szerződés
+nem enged, a böngésző pontosan tudja, melyik kulcsról és milyen értékről van szó; a szerver semmit
+nem tud róla. Bekapcsolt ingesttel a `php artisan aura:errors` arra válaszol, hogy *melyik
+tábladefinícióm sérti a szerződést*.
+
+### Bekapcsolás
+
+```dotenv
+AURA_ERRORS_ENABLED=true
+```
+
+Az alapértelmezett `log` driverrel ez a szerveroldal teljes egésze — nincs tábla, nincs queue,
+nincs migráció. A route az `aura/errors` úton jelenik meg; addig egyáltalán nem létezik, mert egy
+telemetria-végpont ne bukkanjon fel pusztán attól, hogy valaki lefuttatott egy `composer require`-t.
+
+Utána az Aurát kell ráirányítani, a hoszt alkalmazás plugin-configjában:
+
+```js
+app.use(Aura, {
+    errorReporting: true,
+    errorReportingEndpoint: '/aura/errors',
+});
+```
+
+> **Titkos kulcs soha nem kerülhet az `errorReportingApiKey`-be.** Az Aura
+> `Authorization: Bearer …` fejlécként küldi a böngészőből, tehát bárki elolvassa, aki megnyitja a
+> hálózati fület. Egy deploymentet meg tud jelölni; hitelesíteni nem tud. A szerveroldali
+> jogosultság a `middleware` listába való.
+
+### Ami megérkezik
+
+Egy köteg, és semmi más:
+
+```json
+{ "errors": [ { "severity": "warning", "level": "warning", "timestamp": "…",
+                "component": "HeaderValidator", "action": "validate", "type": "validation",
+                "message": "…", "key": "header", "details": "…", "metadata": { … } } ] }
+```
+
+Kérésenként 1–100 bejegyzés. Az Aura 30 másodpercenként flush-ol, vagy amint tíz hiba felgyűlt, és
+a **teljes** sort küldi, nem `batchSize`-nyi szeletet. Az alak a szerződés `aura-error-report`
+dokumentuma; az `assertMatchesAuraErrorReportSchema()` ez ellen validál.
+
+Négy tény a kliensről, ami ezen az oldalon mindent eldönt:
+
+- **Natív `fetch()`-et használ, és nem küld CSRF-tokent.** A `web` middleware-csoport 419-cel
+  válaszolna — örökre, ld. lentebb. A csomagolt `middleware` alapérték a `['throttle:60,1']`, és a
+  `web` nem kerülhet bele.
+- **Minden nem-2xx válasz kudarc.** A köteget négyszer újraküldi (1, 2, 3 másodperc szünettel),
+  utána a sor **elejére** teszi vissza, és exponenciális backoffal ismétli, akár öt percenként. Egy
+  hibás bejegyzés miatt adott 422 tehát nem üzenet a fejlesztőnek — hanem egy megismételhetetlen
+  kérés örök ismétlése.
+- **Kifelé semmi nincs korlátozva.** Egy `HeaderValidator` bejegyzés a teljes visszautasított
+  `header` szekciót viszi a `metadata.receivedValue`-ban; a kliens semmilyen méretkorlátot nem
+  alkalmaz rá, és egy kötegben száz ilyen lehet.
+- **Semmi nem azonosítja a táblát.** Nincs `storeId`, nincs URL és nincs verziómező a payloadban. A
+  `key` és a `component` a legpontosabb azonosítás, ami van; a többit a szerver közelíti a
+  `Referer`, a `User-Agent` és a session alapján.
+
+### Amit válaszol
+
+| Státusz | Mikor |
+| --- | --- |
+| `202 Accepted` | a normál válasz — **akkor is, ha bejegyzések estek ki**. A törzs a `received`, `stored`, `dropped` értékeket és az első néhány `reasons` bejegyzést közli. |
+| `413` | a törzs a `max_payload` fölött volt. Tudatosan elköltött kód: a kliens nem tud kisebb köteget küldeni, de az alternatíva egy korlátlan méretű törzs a böngészőből. |
+| `429` | a `throttle` middleware-től, amit a kliens backoffja helyesen kezel. |
+
+Egy hibás bejegyzés kiesik, a többi mentésre kerül. Ez nem engedékenység, hanem az egyetlen válasz,
+ami véget ér.
+
+### Konfiguráció
+
+Minden kulcs az `aura.errors` alatt:
+
+| Kulcs | Alapérték | Mit dönt el |
+| --- | --- | --- |
+| `enabled` | `env('AURA_ERRORS_ENABLED', false)` | létezik-e egyáltalán a route |
+| `path` | `aura/errors` | hol van regisztrálva |
+| `middleware` | `['throttle:60,1']` | mi mögött fut — soha nem `web` |
+| `driver` | `log` | `log` vagy `database` |
+| `channel` | `null` | log channel a `log` driverhez |
+| `table` | `aura_errors` | tábla a `database` driverhez |
+| `max_payload` | `1048576` | a kérés törzsének plafonja bájtban → `413` |
+| `max_entries` | `100` | egy kötegből megtartott bejegyzések; a többi kiesik, nem utasítja el |
+| `metadata.store` | `true` | tárolja-e egyáltalán a `metadata`-t |
+| `metadata.max_bytes` | `8192` | bejegyzésenként megtartott kódolt `metadata`-bájt |
+| `queue` | `false` | queue-ra kerüljön-e az írás |
+
+**A `metadata` az a kulcs, ami döntést érdemel.** Ez az egyetlen mező, ami a felhasználó által
+begépelt tartalmat hordozhatja: a `SessionStateValidator` a perzisztált session-állapotot jelenti,
+amiben a keresési kifejezések és a szűrőértékek vannak. A `max_bytes` fölött az érték helyére egy
+jelölő kerül, ami megnevezi a méretét és a kulcsait — a bejegyzés sosem esik ki, mert egy túl nagy
+`receivedValue` pont az az eset, amiről tudni érdemes.
+
+### Tárolás
+
+A `log` az alapértelmezés, és rekordonként egy sort ír, a bejegyzés saját `severity`-jével — ami
+már eleve PSR-3 szintnév, tehát a hoszt meglévő log-routingja változatlanul érvényes rá. Amit nem
+tud: deduplikálni.
+
+A `database` tudja. Ehhez kell a migráció:
+
+```bash
+php artisan vendor:publish --tag=aura-error-migrations
+php artisan migrate
+```
+
+Szándékosan publikálható és nem automatikusan betöltött: egy JSON-t előállító könyvtár és egy, ami
+táblát hoz létre az adatbázisodban, két különböző ígéret, és a másodikat kérni kell.
+
+Minden írás egy **fingerprintre** van kulcsolva —
+`sha256(key|component|action|type|message|timestamp)`, az
+`AuraErrorRecord::fingerprint()` állítja elő —, mögötte egyedi indexszel. Ugyanaz a köteg négyszer
+beküldve egyetlen sort hagy maga után. Ez nem szélsőséges eset: pontosan ezt csinálja a kliens
+minden nem-2xx válasz után.
+
+A sor **két számlálót** tart, és **ez a kettő nem ugyanaz a szám**:
+
+- `occurrences` — a kliensé. Hányszor fordult elő a hiba egy böngészőben, ahogy az Aura saját
+  store-ja összevonta. Egy ismételt beérkezés a kettő közül a nagyobbat veszi, sosem az összeget.
+- `receipts` — a szerveré. Hányszor érkezett meg ez a bejegyzés, az újraküldéseket is beleértve.
+
+A kettő összemosása egy újraküldött köteget a felhasználó által látott hibák kiugrásává tenne.
+
+Mellettük a sor azt viszi, amit a payload nem mond ki: `received_at`, `ip`, `user_agent`, `referer`
+és `user_id` — mindegyik közelítés, és mindegyik annyit ér, amennyit a forrása. A `user_id` csak
+azonos originű kérésnél ismert, ahol a natív `fetch()` elküldi a session cookie-t.
+
+Az `AuraErrorRecord::occurredAt()` és az `AuraErrorRecord::lastOccurredAt()` a kliens ISO
+időbélyegeit parse-olja, és `null`-lal felel mindenre, ami nem értelmezhető dátumként — a
+`timestamp` az, amit a böngésző órája produkált, és semmi nem validálja azon túl, hogy string.
+
+**A retenció a hoszt alkalmazásé.** A csomag ír; nem takarít. Ha ablakot akarsz, ütemezz egy
+törlést a táblára:
+
+```php
+Schedule::call(fn () => DB::table('aura_errors')->where('last_received_at', '<', now()->subDays(30))->delete())
+    ->daily();
+```
+
+### Máshová, teljesen
+
+Kösd be a saját `TamasLabs\Aura\Errors\ErrorStore` implementációdat — egyetlen metódus, a
+`store()`, ami megkapja a rekordokat és megmondja, hányat sikerült elhelyezni:
+
+```php
+$this->app->bind(ErrorStore::class, fn () => new SentryErrorStore);
+```
+
+Egy implementáció **nem dobhat kivételt**. A végpont `202`-t válaszol, bármi történjék is a
+köteggel, mert az Aura minden mást örökre újraküld; egy kivétel itt egy tárolási zökkenőt
+kiirthatatlan újrapróbálkozási hurokká tenne.
+
+### Visszaolvasás
+
+```bash
+php artisan aura:errors --limit=20 --key=header --severity=warning
+```
+
+`key`-enként egy sor, a legfrissebbel elöl, mindkét számlálóval és a kibocsátó komponenssel. Azért
+`key` és nem `message` szerint csoportosít, mert az üzenet az Aura `labels`-én keresztül
+renderelődik, és a hoszt nyelvével együtt változik; a kulcs nem. Sorokat olvas, tehát a `database`
+driver kell hozzá — `log` alatt ezt meg is mondja ahelyett, hogy üres táblát nyomtatna, ami jó
+hírnek látszana.
+
+### Amit látni fogsz
+
+Az Aura saját kibocsátói. A hoszt alkalmazás ezen kívül bármit jelenthet a saját `addError`
+hívásával.
+
+| `component` | `action` | `type` | `severity` | Mikor |
+| --- | --- | --- | --- | --- |
+| ~32 `*Validator` (`HeaderValidator`, `BodyValidator`, `BooleanValidator`, …) | `validate` | `validation` | `warning` | a config vagy a válasz egy mezője nem felel meg a sémának — **ezeket okozza ez a csomag** |
+| `ApiResourcesStore` | `fetchData` | `api` | `error` | a kérés elbukott; a `metadata.kind` `network` / `timeout` / `client` / `server` / `unknown`, mellette `status` és `code` |
+| `ApiResourcesStore` | `fetchData` | `validation` | `error` | a válasz megérkezett, de nem lett belőle állapot |
+| `ApiResourcesStore` | `fetchData` | `authorization` | `error` | cross-origin kérés blokkolva (`allowExternalApi`) — a teljes URL az üzenetben van |
+| `CoreStore` | `read` | `client` | `warning` | gyerekkomponens a root előtt olvasta a store-t (bekötési hiba) |
+| `DestroyModal` | `submitDestroyForm` | `authorization` | `warning` | cross-origin destroy-route blokkolva |
+| `resolveConditionalConfig` | `resolve` | `validation` | `warning` | túl mélyen ágyazott feltételes config — kulcs: `conditionalConfig.maxDepth` |
+| `ErrorReporter` | `report` | `network` | `info` | maga a reporter bukott el vagy dobott — kulcsok: `errorReporting.failed`, `errorReporting.dropped` |
+| `ErrorHandlerStore` | `addError` | `unknown` | `info` | a store saját 50-es korlátja betelt — kulcs: `errorHandler.limitReached` |
+
+A `*Validator` sorok azok, amikkel itt kezdeni kell valamit: mindegyik egy konkrét hiba a csomag
+által generált JSON-ben, a mező nevével a `key`-ben.
+
+### Ami ez nem
+
+**A payload telemetria, nem bizonyíték.** Böngészőből érkezik, tervezetten hitelesítetlenül, és
+bárki, aki eléri a route-ot, bármit beleírhat a logodba vagy a tábládba. Korlátozd rátában, és ne
+építs olyan riasztást, ami egy sort bármi bizonyítékának tekint.
 
 ---
 
