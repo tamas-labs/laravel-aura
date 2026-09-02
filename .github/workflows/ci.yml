@@ -34,7 +34,7 @@ jobs:
                       coverage: 'pcov'
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Set up PHP
               uses: shivammathur/setup-php@v2
@@ -83,7 +83,7 @@ jobs:
             # `git tag -l` comes back empty, the guard below finds no baseline,
             # and the job goes green having compared nothing. `VersioningTest`
             # pins this line for that reason.
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
               with:
                   fetch-depth: 0
 
@@ -126,7 +126,7 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             # Local development happens exclusively in this image (see CLAUDE.md),
             # so build it and run the suite inside it to keep it from rotting.
