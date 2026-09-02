@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\Assert;
+use Symfony\Component\Yaml\Yaml;
 use TamasLabs\Aura\AuraContract;
 
 /**
@@ -50,6 +51,25 @@ function auraManifest(): array
 
     /** @var array<string, mixed> $manifest */
     return $manifest;
+}
+
+/**
+ * The CI workflow, parsed.
+ *
+ * @return array<string, mixed>
+ */
+function auraWorkflow(): array
+{
+    $contents = file_get_contents(__DIR__.'/../.github/workflows/ci.yml');
+
+    Assert::assertNotFalse($contents, 'Cannot read .github/workflows/ci.yml');
+
+    $workflow = Yaml::parse($contents);
+
+    Assert::assertIsArray($workflow);
+
+    /** @var array<string, mixed> $workflow */
+    return $workflow;
 }
 
 /**
@@ -163,6 +183,73 @@ it('pins the contract to a tagged range, not to a branch', function () {
         '/(^|\s)(dev-|\*)/',
         $constraint,
         "tamas-labs/aura-schema is pulled at {$constraint}, which pins nothing",
+    );
+});
+
+it('lets the compatibility check see the tags it compares against', function () {
+    // The check compares HEAD against the last tagged minor version, and skips
+    // itself while no tag exists. Those two are a fail-open pair: with the
+    // shallow clone actions/checkout does by default, `git tag -l` comes back
+    // empty even in a repository that has releases, the job concludes there is
+    // nothing to compare against, and it reports success having compared
+    // nothing. Nobody looks twice at a green check.
+    $steps = auraDigArray(auraWorkflow(), 'jobs', 'bc', 'steps');
+
+    $checkouts = [];
+    $checks = 0;
+
+    foreach ($steps as $step) {
+        if (! is_array($step)) {
+            continue;
+        }
+
+        $uses = $step['uses'] ?? null;
+
+        if (is_string($uses) && str_starts_with($uses, 'actions/checkout')) {
+            $checkouts[] = is_array($step['with'] ?? null) ? $step['with'] : [];
+        }
+
+        $run = $step['run'] ?? null;
+
+        if (is_string($run) && str_contains($run, 'composer bc-check')) {
+            $checks++;
+        }
+    }
+
+    expect($checkouts)->toHaveCount(1)
+        ->and($checks)->toBe(1);
+
+    Assert::assertSame(
+        0,
+        $checkouts[0]['fetch-depth'] ?? null,
+        'The backward compatibility job clones shallowly, so it would find no tags and compare nothing',
+    );
+});
+
+it('installs the compatibility checker on its own, never beside the package', function () {
+    // The tool requires PHP `~8.4.0 || ~8.5.0`, and this package's floor is
+    // `^8.3` with a CI leg to match: as a dev dependency it would take the whole
+    // suite's floor up with it, and its `symfony/console` and `composer/composer`
+    // constraints have every chance of colliding with Laravel's. `composer
+    // bc-check` puts it in `build/`, where none of that meets anything.
+    $manifest = auraManifest();
+
+    foreach (['require', 'require-dev'] as $section) {
+        expect(auraDigArray($manifest, $section))
+            ->not->toHaveKey('roave/backward-compatibility-check');
+    }
+
+    $script = auraDigArray($manifest, 'scripts', 'bc-check');
+
+    $commands = implode(' ', array_map(
+        fn (mixed $command): string => is_string($command) ? $command : '',
+        $script,
+    ));
+
+    Assert::assertStringContainsString(
+        '--working-dir=build/bc-check',
+        $commands,
+        'The bc-check script installs the checker somewhere other than its own directory',
     );
 });
 

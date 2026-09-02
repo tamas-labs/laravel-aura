@@ -68,6 +68,54 @@ jobs:
               if: matrix.coverage != ''
               run: composer test:coverage
 
+    bc:
+        name: Backward compatibility
+        runs-on: ubuntu-latest
+
+        steps:
+            # The check compares HEAD against the last tagged minor version, so
+            # the tags have to be present: with the shallow default clone
+            # `git tag -l` comes back empty, the guard below finds no baseline,
+            # and the job goes green having compared nothing. `VersioningTest`
+            # pins this line for that reason.
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            # Nothing to compare against until the first release. The step turns
+            # the check on by itself at the first tag, rather than leaving a
+            # follow-up commit as the only thing between a release and an
+            # unguarded API.
+            - name: Look for a baseline to compare against
+              id: baseline
+              run: |
+                  if git tag -l | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+$'; then
+                      echo "released=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "released=false" >> "$GITHUB_OUTPUT"
+                      echo "::notice::No stable release tag in this repository yet, so there is no published API to compare against. The check starts running at the first tag."
+                  fi
+
+            - name: Set up PHP
+              if: steps.baseline.outputs.released == 'true'
+              uses: shivammathur/setup-php@v2
+              with:
+                  # The tool requires PHP 8.4; this package's own `^8.3` floor
+                  # does not apply, because the two are never installed into the
+                  # same directory.
+                  php-version: '8.4'
+                  extensions: dom, simplexml, mbstring, zip
+                  ini-values: memory_limit=-1
+                  coverage: none
+
+            # Reads the `autoload` paths out of composer.json, so it sees `src/`
+            # and neither the tests nor the workbench. Symbols carrying
+            # `@internal` are skipped, and adding `@internal` to one that did not
+            # have it is itself reported — the same line F6.4 draws.
+            - name: Check for backward incompatible changes
+              if: steps.baseline.outputs.released == 'true'
+              run: composer bc-check
+
     docker:
         name: Docker image
         runs-on: ubuntu-latest

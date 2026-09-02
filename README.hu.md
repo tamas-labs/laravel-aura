@@ -1632,6 +1632,10 @@ szándékosan nincs.
   számot várnak. Validáció nem változott: a dokumentumok pontosan ugyanazt fogadják el és utasítják
   el, mint eddig. Két nyilvános repó két egymásnak ellentmondó igazsággal rosszabb, mint ha az egyik
   hallgat — és egy 1.0-s tag az a pillanat, amikor ez már nem javítható csendben.
+- **A kompatibilitás-ellenőrzésnek még nincs mihez hasonlítania.** A `composer bc-check` az utolsó
+  taggelt kiadáshoz méri az API-t, tag pedig nincs; a CI-job ezt kiírja és nem csinál semmit —
+  ahelyett, hogy csendben zöldre menne —, az első tagnél viszont magától elindul. Lásd a
+  [Fejlesztés](#fejlesztés) szakaszt.
 - **A csomag nincs fenn Packagiston**, tehát a `composer require tamas-labs/laravel-aura:dev-main`
   egy `repositories` bejegyzés mellett az egyetlen telepítési mód *ehhez* a csomaghoz — a `dev-main`
   pedig azt jelenti: „amit a `main` ma mond", beleértve egy egy órája bekerült törő változást is.
@@ -1676,6 +1680,7 @@ docker compose run --rm php composer install     # függőségek telepítése
 docker compose run --rm php composer quality     # pint + phpstan + pest — amit a CI futtat
 docker compose run --rm php vendor/bin/pest      # a teszt-suite
 docker compose run --rm php composer test:coverage   # a suite a lefedettségi küszöbbel
+docker compose run --rm php composer bc-check     # API-törések az utolsó kiadáshoz képest
 docker compose run --rm php vendor/bin/pest --filter "clamps paginate"
 docker compose run --rm php vendor/bin/phpstan analyse
 docker compose run --rm php vendor/bin/pint      # formázás alkalmazása
@@ -1708,6 +1713,24 @@ dokumentáció-őr is bejár —, a `tests/PublicSurfaceTest.php` pedig újraép
 elbukik. Semmit nem tilt: csak kimondatja az irányt, mert egy megjelent metódus minor kiadás, egy
 eltűnt viszont major — és egy dokumentált metódusra tett `@internal` a másodikból való. A feljegyzés
 nélkül mindkettő hétköznapi commitnak látszik.
+
+**És nem csak a nevek, az alak is ellenőrzött.** A `composer bc-check` a
+[`roave/backward-compatibility-check`](https://github.com/Roave/BackwardCompatibilityCheck)-et
+futtatja az utolsó taggelt minor verzió ellen. Az `autoload` útvonalakat a `composer.json`-ból
+olvassa, tehát a `src/`-et látja, a teszteket és a workbenchet nem — és azt fogja meg, amit egy
+névlista nem tud: egy hozzávett paramétert, egy szűkített típust, egy tágított visszatérési típust,
+egy `final`-lá tett osztályt. Mindent kihagy, ami `@internal`, és jelenti, ha egy olyan szimbólum
+*kap* `@internal`-t, amin eddig nem volt — pontosan az a határ, amit ez a szakasz húz, csak
+egymástól függetlenül. A CI külön jobként futtatja minden push-ra és pull requestre, az első tagtől
+kezdve.
+
+Az ellenőrző **nem** függősége ennek a csomagnak, és nem is válhat azzá: PHP `~8.4.0 || ~8.5.0`-t
+kér az itteni `^8.3` küszöb mellett, a Composer- és Symfony-megkötései pedig minden eséllyel
+ütköznek a Laravelével. A `composer bc-check` a `build/bc-check`-be telepíti, külön, ahol ezek
+közül semmi nem találkozik semmivel. Az első futás előtt két dolgot érdemes tudni: **commitolt**
+revíziókat hasonlít össze — a repót egy ideiglenes könyvtárba klónozza, tehát a nem commitolt munka
+láthatatlan neki —, és szüksége van a tagekre, ezért klónozza a CI-job a teljes history-t a sekély
+alapértelmezett helyett.
 
 **A dokumentáció a kapu része.** A `tests/DocsCoverageTest.php` végigmegy reflexióval a `src/`
 minden osztályán, és elbukik, ha egy publikus metódust egyik teljes referencia sem említ — vagy ha

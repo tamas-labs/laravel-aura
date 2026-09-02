@@ -1609,6 +1609,10 @@ and no field in the payload.
   documents accept and reject exactly what they did before. Two public repositories publishing
   contradictory truths is worse than one of them being silent, and a 1.0 tag is the moment it stops
   being fixable quietly.
+- **The compatibility check has nothing to compare against yet.** `composer bc-check` compares the
+  API against the last tagged release, and there is no tag; the CI job reports that and does
+  nothing, rather than passing quietly, and starts checking on its own at the first one. See
+  [Development](#development).
 - **The package is not on Packagist**, so `composer require tamas-labs/laravel-aura:dev-main` over a
   `repositories` entry is the only way to install *this* package, and `dev-main` means "whatever
   `main` says today" — including a breaking change made an hour ago.
@@ -1653,6 +1657,7 @@ docker compose run --rm php composer install     # install dependencies
 docker compose run --rm php composer quality     # pint + phpstan + pest — what CI runs
 docker compose run --rm php vendor/bin/pest      # the test suite
 docker compose run --rm php composer test:coverage   # the suite, with the coverage floor
+docker compose run --rm php composer bc-check     # API breaks against the last release
 docker compose run --rm php vendor/bin/pest --filter "clamps paginate"
 docker compose run --rm php vendor/bin/phpstan analyse
 docker compose run --rm php vendor/bin/pint      # apply formatting
@@ -1684,6 +1689,23 @@ method the version promise covers — the same set the documentation guard walks
 makes the direction explicit, because a method that appeared is a minor release and one that
 vanished is a major one, and an `@internal` added to a documented method is the second of those.
 Both read as ordinary commits without the record.
+
+**And the shape is checked, not only the names.** `composer bc-check` runs
+[`roave/backward-compatibility-check`](https://github.com/Roave/BackwardCompatibilityCheck) against
+the last tagged minor version. It reads the `autoload` paths out of `composer.json`, so it sees
+`src/` and neither the tests nor the workbench, and it catches what a list of names cannot: a
+parameter added, a type narrowed, a return type widened, a class made `final`. It skips everything
+marked `@internal`, and reports *adding* `@internal` to a symbol that did not carry it — the same
+line this section draws, arrived at independently. CI runs it as its own job on every push and pull
+request, from the first tag onwards.
+
+The checker is **not** a dependency of this package and must not become one: it requires PHP
+`~8.4.0 || ~8.5.0` against a `^8.3` floor here, and its Composer and Symfony constraints have every
+chance of colliding with Laravel's. `composer bc-check` installs it into `build/bc-check`, on its
+own, where none of that meets anything. Two things are worth knowing before the first run: it
+compares *committed* revisions — it clones the repository into a temporary directory, so
+uncommitted work is invisible to it — and it needs the tags, which is why the CI job checks out the
+full history rather than the shallow default.
 
 **The documentation is part of the gate.** `tests/DocsCoverageTest.php` reflects over every class
 under `src/` and fails when a public method is mentioned in neither full reference — or in only one

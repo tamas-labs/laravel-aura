@@ -28,6 +28,26 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **BC-törés-ellenőrzés a CI-ban (audit P3).** Új `bc` job és `composer bc-check` script: a
+  [`roave/backward-compatibility-check`](https://github.com/Roave/BackwardCompatibilityCheck) az
+  utolsó taggelt minor verzióhoz méri a `src/` publikus API-ját (az `autoload` útvonalakat olvassa,
+  tehát a teszteket és a workbenchet nem látja). Azt fogja meg, amit a felület-feljegyzés nem tud —
+  hozzávett paraméter, szűkített típus, tágított visszatérési típus, `final`-lá tett osztály —, és
+  a határa **ugyanaz az `@internal`**, amit az F6.4 húz: a megjelölt szimbólumokat kihagyja, egy
+  dokumentált metódusra *tett* `@internal`-t viszont törésnek jelenti. Az első próbafutás ezt rögtön
+  meg is mutatta: a P2-ben megjelölt `ColumnGroup::columns()`-ra pontosan ezt mondta.
+    - **Nem dev-függőség, és nem is lehet az**: PHP `~8.4.0 || ~8.5.0`-t kér az itteni `^8.3` küszöb
+      és a 8.3-as CI-ág mellett, a `composer/composer` és `symfony/console` megkötései pedig minden
+      eséllyel ütköznek a Laravelével. A script a `build/bc-check`-be telepíti, magában; teszt
+      tiltja, hogy a `require` vagy a `require-dev` közé kerüljön.
+    - **Az első tagig nincs mihez hasonlítani**, ezért a job egy őrlépés mögött ül, ami kiírja ezt,
+      és az első taggel magától elindul. Az őrlépés és a sekély klón együtt fail-open pár lenne:
+      `fetch-depth: 0` nélkül a `git tag -l` egy kiadott repóban is üres, a job pedig zölden
+      jelentené, hogy nem talált törést. Ezért teljes a history, és ezért van rá teszt a
+      `VersioningTest`-ben.
+    - A tool `git clone`-nal dolgozik, tehát **commitolt** revíziókat hasonlít össze: a
+      munkapéldány láthatatlan neki.
+
 - **A publikus felület feljegyezve (audit P2 lezárása).** A `tests/Docs/public-surface.txt` a 246
   metódus, amit a verzió-ígéret fed; a `tests/PublicSurfaceTest.php` újraépíti és bármilyen
   eltérésre elbukik. **Semmit nem tilt — az irányt mondatja ki**: egy megjelent metódus minor

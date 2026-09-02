@@ -82,6 +82,11 @@
             "@analyse",
             "@test:coverage"
         ],
+        "bc-check": [
+            "mkdir -p build/bc-check",
+            "@composer --working-dir=build/bc-check --no-interaction --no-progress require roave/backward-compatibility-check:^8.21",
+            "build/bc-check/vendor/bin/roave-backward-compatibility-check"
+        ],
         "build": "@php vendor/bin/testbench workbench:build --ansi",
         "serve": [
             "@build",
