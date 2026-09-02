@@ -26,7 +26,32 @@ szerződés verziója külön él a csomagverziótól.
   csomagnak a viselkedése sem változott — eddig is a valóság szerint emittált; ami megszűnt, az az,
   hogy két nyilvános repó két egymásnak ellentmondó igazságot publikál.
 
+### Javítva
+
+- **A CI mind a négy mátrixága piros volt — a P7 melléktermékeként derült ki.** Három független ok,
+  és egyik sem látszott a repóból:
+    - **Mind a négy ágon**: a mátrix a Laravel-verziót `composer require --no-update`-tel rögzítette,
+      ami **beleírja a megkötést a `composer.json`-be** — a `VersioningTest` viszont épp a
+      `composer.json`-t olvassa igazságként ahhoz, amit a két README követelmény-listájának szó
+      szerint idéznie kell. A rögzítés tehát pontosan azt a két tesztet buktatta, amit őrizni
+      hivatott, az F6.4 óta minden ágon. A megoldás a `composer update --with`, ami csak az adott
+      futásra alkalmazza a megkötést, és a manifestet nem érinti; új teszt utasít el bármilyen
+      `composer require`-t a `test` jobban.
+    - **A Laravel 12-es ágakon**: a `src/Query/AuraQuery.php` `@phpstan-ignore`-jának `argument.type`
+      fele **csak Laravel 13-on illeszkedik** (a 13 generikusként deklarálja az `Expression`-t és a
+      konstruktorát a template-tel tipizálja, a 12 nem), egy nem illeszkedő inline ignore pedig maga
+      is hiba — ráadásul `ignore.unmatchedIdentifier`-ként **nem elnyomható**. Ez a fél átkerült a
+      `phpstan.neon`-ba `reportUnmatched: false`-szal, a `return.type` maradt a kód mellett.
+    - **PHP 8.5-ön**: `tests/ActionColumnTest.php` — az `array_key_last()` `int|string|null`-ja
+      lehetséges érvénytelen tömbkulcs. Üres tömbre most rövidre zár.
+
 ### Hozzáadva
+
+- **PHP 8.5 a CI-mátrixban (audit P7).** A mátrix hat ág: 8.3 / 8.4 / 8.5 × Laravel 12 / 13. Mind a
+  hatot végigfuttattuk lokálisan is, PHP-verziónként külön image-ben, a CI lépéseivel (Pint,
+  PHPStan `max`, Pest): **391 teszt / 1527 assertion, ágonként zölden**. A lefedettség-mérés a 8.4-es
+  ágon marad, szándékosan: a lefedettség-mérő az a része egy eszközláncnak, ami egy új PHP-kiadás
+  után késve érkezik, és a hiánya olyan jobot buktatna, aminek semmi köze a PHP 8.5-höz.
 
 - **BC-törés-ellenőrzés a CI-ban (audit P3).** Új `bc` job és `composer bc-check` script: a
   [`roave/backward-compatibility-check`](https://github.com/Roave/BackwardCompatibilityCheck) az

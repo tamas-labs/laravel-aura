@@ -16,16 +16,19 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                php: ['8.3', '8.4']
+                php: ['8.3', '8.4', '8.5']
                 laravel: ['12', '13']
                 include:
                     - laravel: '12'
                       testbench: '^10.0'
                     - laravel: '13'
                       testbench: '^11.0'
-                    # Coverage is measured once, on the newest supported pair.
-                    # The number does not differ per leg — the suite is the
-                    # same — and pcov on all four would only cost time.
+                    # Coverage is measured on one leg only: the number
+                    # does not differ per leg — the suite is the same — and pcov
+                    # on all six would only cost time. Not the newest leg on
+                    # purpose; the coverage driver is the part of a toolchain
+                    # that lags a new PHP release, and a missing one here would
+                    # fail a job that is not about PHP 8.5 at all.
                     - php: '8.4'
                       laravel: '13'
                       coverage: 'pcov'
@@ -41,16 +44,18 @@ jobs:
                   ini-values: memory_limit=-1
                   coverage: ${{ matrix.coverage || 'none' }}
 
-            - name: Pin the Laravel version under test
+            # `--with` applies the matrix constraint to this run alone.
+            # `composer require --no-update` would write it into composer.json,
+            # and the suite reads composer.json as the source of truth for the
+            # requirement lists both READMEs have to quote — so the pin failed
+            # the very tests that guard it, on every leg. `VersioningTest` now
+            # refuses a workflow that edits the manifest.
+            - name: Install the dependencies for this leg
               run: |
-                  composer require --no-update --no-interaction \
-                      "illuminate/contracts:^${{ matrix.laravel }}.0" \
-                      "illuminate/support:^${{ matrix.laravel }}.0"
-                  composer require --dev --no-update --no-interaction \
-                      "orchestra/testbench:${{ matrix.testbench }}"
-
-            - name: Install dependencies
-              run: composer update --prefer-dist --no-interaction --no-progress
+                  composer update --prefer-dist --no-interaction --no-progress \
+                      --with "illuminate/contracts:^${{ matrix.laravel }}.0" \
+                      --with "illuminate/support:^${{ matrix.laravel }}.0" \
+                      --with "orchestra/testbench:${{ matrix.testbench }}"
 
             - name: Check formatting
               run: vendor/bin/pint --test

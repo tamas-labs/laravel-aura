@@ -28,7 +28,10 @@ beforeEach(function (): void {
 function auraLastHeaderRow(array $definition): array
 {
     $rows = auraDigArray($definition, 'header', 'rows');
-    $last = $rows[array_key_last($rows)] ?? [];
+
+    // `array_key_last()` answers `int|string|null`, and the null is a possibly
+    // invalid offset — an error PHPStan reports on PHP 8.5 and not below it.
+    $last = $rows === [] ? [] : $rows[array_key_last($rows)];
 
     /** @var list<array<string, mixed>> $cells */
     $cells = is_array($last) ? ($last['cells'] ?? []) : [];

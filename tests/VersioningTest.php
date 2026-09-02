@@ -226,6 +226,27 @@ it('lets the compatibility check see the tags it compares against', function () 
     );
 });
 
+it('pins a matrix leg without rewriting the manifest', function () {
+    // The suite reads composer.json as the truth about what both requirement
+    // lists have to quote. A workflow step that writes the leg's Laravel version
+    // into the manifest before running the suite therefore fails the very tests
+    // that guard the manifest — on every leg, for as long as nobody looks.
+    // `composer update --with` applies the constraint to that one run instead.
+    foreach (auraDigArray(auraWorkflow(), 'jobs', 'test', 'steps') as $step) {
+        $run = is_array($step) ? ($step['run'] ?? null) : null;
+
+        if (! is_string($run)) {
+            continue;
+        }
+
+        Assert::assertStringNotContainsString(
+            'composer require',
+            $run,
+            'A matrix leg writes its own constraints into composer.json, which the tests below read as the truth',
+        );
+    }
+});
+
 it('installs the compatibility checker on its own, never beside the package', function () {
     // The tool requires PHP `~8.4.0 || ~8.5.0`, and this package's floor is
     // `^8.3` with a CI leg to match: as a dev dependency it would take the whole

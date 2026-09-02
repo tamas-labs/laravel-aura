@@ -352,9 +352,10 @@ final class AuraQuery
      *
      * The query grammar cannot express an `ESCAPE` clause, and without one the
      * `%` and `_` a user types stay wildcards — a search for `100%` would also
-     * return `1000`. Larastan refuses to type dynamic SQL on purpose, so the two
-     * suppressions below are the visible marker for it. They are safe only while
-     * both of these hold:
+     * return `1000`. Larastan refuses to type dynamic SQL on purpose, so the
+     * suppression below — and its `argument.type` half in `phpstan.neon`, which
+     * only Laravel 13 raises — is the visible marker for it. They are safe only
+     * while both of these hold:
      *
      * - `$column` is never client input. It comes from {@see FieldPermissions},
      *   and is then put through the grammar's own `wrap()`.
@@ -365,7 +366,7 @@ final class AuraQuery
      */
     private static function likeExpression(string $column): Expression
     {
-        /** @phpstan-ignore return.type, argument.type */
+        /** @phpstan-ignore return.type */
         return new Expression($column." LIKE ? ESCAPE '".self::LIKE_ESCAPE."'");
     }
 

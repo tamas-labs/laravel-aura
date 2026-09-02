@@ -1667,7 +1667,7 @@ One service, `php`, on `php:8.4-cli-alpine`. **No database container** — the s
 in-memory SQLite, so `docker compose up` is never needed.
 
 The quality gate is Laravel Pint (`laravel` preset), PHPStan/Larastan at level **max** over `src/`,
-`tests/` and `workbench/`, and Pest. CI runs the matrix natively (PHP 8.3/8.4 × Laravel 12/13) and
+`tests/` and `workbench/`, and Pest. CI runs the matrix natively (PHP 8.3/8.4/8.5 × Laravel 12/13) and
 separately builds this image so the Dockerfile cannot rot.
 
 **Coverage has a floor, and the floor is the gate.** `composer test:coverage` runs the suite with
@@ -1676,7 +1676,8 @@ threshold is not in `phpunit.xml` because PHPUnit has no fail-under of its own �
 the mechanism. The image carries **pcov** rather than Xdebug (the only thing wanted here is the
 line count, and pcov measures it far more cheaply), restricted by `pcov.directory` to the same
 `src/` that `phpunit.xml` declares, so neither `vendor/` nor the tests are instrumented. CI measures
-once, on the newest supported pair — the number does not differ per matrix leg.
+once, on PHP 8.4 — the number does not differ per matrix leg, and the coverage driver is the part
+of a toolchain that lags a new PHP release, so the newest leg is deliberately not the one measured.
 
 The nine points between the floor and 100 are almost entirely the fluent setters: one-line
 `return $this->set('align', $align)` methods on the cell types and their traits, documented but

@@ -8,3 +8,14 @@ parameters:
         - tests
         - workbench
     tmpDir: build/phpstan
+    ignoreErrors:
+        # The other half of the suppression documented on
+        # AuraQuery::likeExpression(). Laravel 13 declares `Expression` generic
+        # and types its constructor with the template, Laravel 12 does not — so
+        # this error exists on one of the two framework majors this package
+        # supports and not on the other, and an inline ignore that matches
+        # nothing is itself a (non-ignorable) error. Hence `reportUnmatched`.
+        -
+            identifier: argument.type
+            path: src/Query/AuraQuery.php
+            reportUnmatched: false

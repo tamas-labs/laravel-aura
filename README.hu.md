@@ -1691,7 +1691,7 @@ in-memory SQLite-on fut, így a `docker compose up`-ra soha nincs szükség.
 
 A minőségi kapu: Laravel Pint (`laravel` preset), PHPStan/Larastan **max** szinten a `src/`, a
 `tests/` és a `workbench/` felett, valamint Pest. A CI a mátrixot natívan futtatja
-(PHP 8.3/8.4 × Laravel 12/13), és külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
+(PHP 8.3/8.4/8.5 × Laravel 12/13), és külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
 
 **A lefedettségnek van alsó küszöbe, és a küszöb maga a kapu.** A `composer test:coverage` a
 suite-ot `--min=90`-nel futtatja, ami a szám alatt elbukik, nem pedig kiír egy riportot, amit senki
@@ -1699,7 +1699,9 @@ nem olvas. A küszöb nem a `phpunit.xml`-ben van, mert a PHPUnit-nak nincs saj�
 mechanizmusa — a Pest `--min` kapcsolója az. Az image **pcov**-ot visz, nem Xdebugot (itt egyedül a
 sorszámlálás a cél, azt pedig a pcov töredék költséggel méri), és a `pcov.directory` ugyanarra a
 `src/`-re szűkíti, amit a `phpunit.xml` is deklarál — így sem a `vendor/`, sem a tesztek nincsenek
-műszerezve. A CI egyszer mér, a legfrissebb támogatott páron: a szám mátrixáganként nem tér el.
+műszerezve. A CI egyszer mér, a PHP 8.4-es ágon: a szám mátrixáganként nem tér el, a lefedettség-
+mérő pedig az a része egy eszközláncnak, ami egy új PHP-kiadás után késve érkezik — a legfrissebb ág
+szándékosan nem az, amelyiken mérünk.
 
 A küszöb és a 100 közötti kilenc pont szinte teljes egészében a fluent setterek: egysoros
 `return $this->set('align', $align)` metódusok a cella-típusokon és a trait-jeiken, amiket a
