@@ -1599,7 +1599,9 @@ gyakran cache-elt, tehát a gazdaalkalmazás észre sem venné.
 Az `@internal` határ nem szándék kérdése: a `tests/DocsCoverageTest.php` reflexióval végigmegy a
 `src/`-en, és elbukik, ha egy metódus se nincs benne mindkét teljes referenciában, se nincs
 `@internal`-nak jelölve — a két lista tehát ugyanaz a lista. Amit itt dokumentálunk, azt fedi a
-verzió-ígéret; mást nem. Lásd a [Fejlesztés](#fejlesztés) szakaszt.
+verzió-ígéret; mást nem. És a fedett halmaz le is van írva: a `tests/Docs/public-surface.txt`
+mind a 246-ot tartalmazza, és az a build, amelyik egyet hozzátesz vagy elveszít, névvel mondja
+meg — abban az irányban, ami a kiadást eldönti. Lásd a [Fejlesztés](#fejlesztés) szakaszt.
 
 ### Mit fed a szerződés saját verziója
 
@@ -1694,6 +1696,13 @@ A küszöb és a 100 közötti kilenc pont szinte teljes egészében a fluent se
 dokumentáció leír, de teszt sosem hív. Ezeken a metódusokon él a szerződés 73 property-neve, és egy
 őr, ami azt bizonyítja, hogy minden setter azt a slotot írja, amit állít, többet ér, mint a
 lefedettségi szám, amit elmozdítana.
+
+**A publikus felület fel van jegyezve, nem emlékezetből él.** A `tests/Docs/public-surface.txt`
+felsorolja az összes metódust, amit a verzió-ígéret fed — ugyanazt a halmazt, amit a
+dokumentáció-őr is bejár —, a `tests/PublicSurfaceTest.php` pedig újraépíti, és bármilyen eltérésre
+elbukik. Semmit nem tilt: csak kimondatja az irányt, mert egy megjelent metódus minor kiadás, egy
+eltűnt viszont major — és egy dokumentált metódusra tett `@internal` a másodikból való. A feljegyzés
+nélkül mindkettő hétköznapi commitnak látszik.
 
 **A dokumentáció a kapu része.** A `tests/DocsCoverageTest.php` végigmegy reflexióval a `src/`
 minden osztályán, és elbukik, ha egy publikus metódust egyik teljes referencia sem említ — vagy ha

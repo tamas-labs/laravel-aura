@@ -1576,7 +1576,9 @@ and the definition is often cached, so a host application cannot even see it hap
 
 The `@internal` line is not a matter of intent: `tests/DocsCoverageTest.php` reflects over `src/`
 and fails when a method is neither documented in both full references nor marked `@internal`, so
-the two lists are the same list. Everything documented here is covered; nothing else is. See
+the two lists are the same list. Everything documented here is covered; nothing else is. And the
+covered set is written down — `tests/Docs/public-surface.txt` holds all 246 of them, and a build
+that adds or loses one says so by name, in the direction that decides the release. See
 [Development](#development).
 
 ### What the contract's own version covers
@@ -1671,6 +1673,13 @@ The nine points between the floor and 100 are almost entirely the fluent setters
 `return $this->set('align', $align)` methods on the cell types and their traits, documented but
 never called by a test. They are the surface the contract's 73 property names live on, and a guard
 that every setter emits the slot it claims is worth more than the coverage number it would move.
+
+**The public surface is recorded, not remembered.** `tests/Docs/public-surface.txt` lists every
+method the version promise covers — the same set the documentation guard walks — and
+`tests/PublicSurfaceTest.php` rebuilds it and fails on any difference. It refuses nothing; it only
+makes the direction explicit, because a method that appeared is a minor release and one that
+vanished is a major one, and an `@internal` added to a documented method is the second of those.
+Both read as ordinary commits without the record.
 
 **The documentation is part of the gate.** `tests/DocsCoverageTest.php` reflects over every class
 under `src/` and fails when a public method is mentioned in neither full reference — or in only one

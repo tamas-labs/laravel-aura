@@ -8,6 +8,28 @@ szerződés verziója külön él a csomagverziótól.
 
 ### Hozzáadva
 
+- **A publikus felület feljegyezve (audit P2 lezárása).** A `tests/Docs/public-surface.txt` a 246
+  metódus, amit a verzió-ígéret fed; a `tests/PublicSurfaceTest.php` újraépíti és bármilyen
+  eltérésre elbukik. **Semmit nem tilt — az irányt mondatja ki**: egy megjelent metódus minor
+  kiadás, egy eltűnt major, és egy dokumentált metódusra tett `@internal` a másodikból való. A
+  feljegyzés nélkül mindkettő hétköznapi commitnak látszik: a docs-őr csak azt tudja, hogy le van
+  írva, a verzió-őr csak azt, hogy az ígéret ki van mondva — hogy maga az ígéret változott, egyik
+  sem veszi észre.
+    - A P2 megnevezett ~30 plumbing-metódusából a 6.3 huszonnyolcat már megjelölt. A két maradékból
+      a `ColumnGroup::columns()` most `@internal` (csak a definíció-építő olvassa; egy csoportot az
+      oszlopai **átadásával** építünk, nem visszaolvasásával), az `AuraQuery::apply()` viszont
+      **szándékosan publikus marad**: a `paginate()` alatti fél, amivel a gazdaalkalmazás lapozás
+      nélkül kapja meg a megszűrt buildert (export, `count`, `chunk`), és mindkét referencia
+      így is dokumentálja.
+    - A `ColumnGroup::columns()` egyúttal az első bizonyíték arra, hogy a docs-őr engedékenysége
+      **átereszt**: a metódus csak azért számított dokumentáltnak, mert az `AuraTable::columns()`-t
+      minden README leírja, és a mintaillesztés osztálytól függetlenül keresi a nevet. Az őr ettől
+      még nem szigorodik — a cella-típusok szándékosan közös dokumentációs blokkokat kapnak —, de a
+      felület-feljegyzés mostantól osztályonként rögzíti, mi tartozik az ígéretbe.
+    - A rövid osztálynév azért használható azonosítóként, mert a teszt bizonyítja is: két azonos
+      rövid nevű osztály a `src/` alatt elbuktatja a futást, mielőtt a feljegyzés rossz osztályra
+      hivatkozna.
+
 - **`LICENSE` fájl és a Packagist-metaadatok (audit P1 + P9).** A `composer.json` eddig is
   `"license": "MIT"`-et állított, de a szövege hiányzott a repóból — egy telepített másolat így
   licenc nélkül érkezett volna. Mellé a `homepage` és a `support.issues` / `support.source`, amiket

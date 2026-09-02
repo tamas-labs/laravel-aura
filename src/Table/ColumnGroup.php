@@ -64,6 +64,9 @@ final class ColumnGroup
     /**
      * The columns this group covers.
      *
+     * @internal Read by the definition builder while flattening the entries; a
+     * group is built by passing its columns in, never by reading them back.
+     *
      * @return list<Column>
      */
     public function columns(): array
