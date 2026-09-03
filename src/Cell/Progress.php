@@ -7,6 +7,7 @@ namespace TamasLabs\Aura\Cell;
 use TamasLabs\Aura\Cell\Concerns\HasElement;
 use TamasLabs\Aura\Cell\Concerns\HasTypography;
 use TamasLabs\Aura\Response\NumericFields;
+use TamasLabs\Aura\Support\JsonMap;
 
 /**
  * A progress bar.
@@ -165,13 +166,14 @@ final class Progress extends CellConfig
      * A `"min-max"` keyed lookup of bar settings.
      *
      * Progress has its own range-keyed mapping semantics, so the keys are
-     * ranges (`"0-25"`), not values.
+     * ranges (`"0-25"`), not values — and like every other mapping it goes out
+     * as a JSON object, see {@see JsonMap}.
      *
-     * @param  array<string, array<string, mixed>>  $mapping
+     * @param  array<array-key, array<string, mixed>>  $mapping
      */
     public function mapping(array $mapping): self
     {
-        return $this->set('mapping', $mapping);
+        return $this->set('mapping', JsonMap::from($mapping));
     }
 
     /**

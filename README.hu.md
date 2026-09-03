@@ -336,6 +336,7 @@ Column::actions('id', Action::edit())        // a resource-linkek — lásd Acti
 | `globalSearch()` | beveszi a mezőt a toolbar globális keresőjébe |
 | `reference('masik_mezo')` | más mezőn műveletezik, mint amit renderel |
 | `elements([...])` / `options(Enum::class)` | a szűrő-legördülő opciói |
+| `elementsMap([...])` | ugyanazok az opciók explicit érték → felirat map-ként |
 | `selectable()` | ide kerülnek a sor-kijelölő checkboxok |
 | `show(false)` / `hidden()` | rejtve indul — megjelenítés, soha nem jogosultság |
 
@@ -343,6 +344,13 @@ A `reference()` az, amivel egy renderelt oszlop egy mögöttes szerint rendez: a
 `last_name` szerint. Az Aura a küldendő mezőt `reference || field || key` sorrendben oldja fel, és
 a whitelist ugyanezt követi — tehát a reference az, amit a lekérdezés elfogad, nem a renderelt
 mező.
+
+A globális keresés az egyetlen hely, ahol egy helyett két név megy ki, mert két fogyasztója van. A
+`header.settings.searchableItems` a **renderelt** mezőt nevezi meg: az Aura minden bejegyzését egy
+header-cella `field`-jéhez illeszti, és egyetlen illesztetlen elem miatt az egész fejlécet
+elutasítja, kliensoldali módban pedig a sorban oldja fel. A whitelist a **reference**-t nevezi meg,
+mert az kerül a `WHERE`-be. Egy `company_name` oszlopnál `->reference('company.name')` mellett a
+böngésző `company_name`-et kap, a lekérdezés pedig `company.name`-en fut.
 
 A `hidden()` **nem jogosultság.** A rejtett oszlopot a felhasználó visszakapcsolhatja; amit senki
 nem láthat, az ne legyen benne a `columns()`-ban.
@@ -433,6 +441,14 @@ pedig az, amit a felhasználó olvas. Az az enum, amelyik **nem** implementálta
 szintén használható listát ad a case-neveiből, tehát ez megfogalmazást vesz, nem viselkedést.
 
 Ha a modell nem castol arra az enumra, kérd közvetlenül: `->options(Status::class)`.
+
+Az `elements()` mindkét alakot elfogadja, amit a szerződés enged: listát, ahol az érték *maga* a
+felirat, és érték → felirat map-et. A PHP a kettőt nem tudja megkülönböztetni, ha a kulcsok `0, 1,
+2…` sorrendben futnak — a `'0'` string kulcsot `0` egésszé normalizálja, így a
+`[0 => 'Nem', 1 => 'Igen']` ugyanaz a tömb, mint a `['Nem', 'Igen']`, listaként menne ki, a szűrő
+pedig a feliratot kérné a szervertől. Mondd meg, melyiket érted:
+`elementsMap([0 => 'Nem', 1 => 'Igen'])`. Az `options()` és a cast-inferencia mindig map-et ad ki,
+tehát egy `0`/`1` értékű enumhoz nem kell semmi külön.
 
 Az opciók az enum case-eiből jönnek, nem a betöltött sorokból. Ez az a különbség, ami számít: a
 sorokból származtatott lista nem tud olyan státuszt felkínálni, ami még senkinél nem szerepel.
@@ -616,7 +632,9 @@ metódus ezeken az osztályokon `@internal`, és nem tartozik a verzió-ígéret
 **Mapping** — a `Reference`, `Badge`, `Link`, `Button`, `Icon` és `Custom` típusokon: a `mapping(array
 $mapping)` a mező értéke szerint kulcsolt kereső-tábla, minden bejegyzés egy beállítás-csomag arra
 az értékre. A `Progress`-nek is van, de más szemantikával — ott a kulcsok tartományok (`"0-25"`),
-nem értékek.
+nem értékek. A mapping mindig JSON-objektumként megy ki, beleértve a `0` / `1` kulcsokat, amiket
+egy int-backed enum ad: az Aura `z.record(z.string(), …)`-ként tipizálja a slotot, tömb esetén
+elutasítja, és ezzel az egész body-validáció megáll.
 
 **Route-ok** — a `Link`, `Button`, `Icon` és `Modal` típusokon: `route(string $route)`, lásd a
 [Route-ok](#route-ok) szakaszt.

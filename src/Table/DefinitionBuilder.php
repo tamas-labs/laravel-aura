@@ -96,10 +96,12 @@ final readonly class DefinitionBuilder
                 rows: $grouped ? [$top, $second] : [$top],
                 columns: $columns,
                 configs: $cells->configs(),
-                // The header publishes the whitelist's own list rather than a
-                // second one built the same way: `searchableItems` and what the
-                // query layer accepts are the same array, structurally.
-                searchableItems: $permissions->globalSearch,
+                // The same columns as the whitelist's global search, under the
+                // names the *browser* knows them by: Aura matches every entry
+                // here against a header cell's `field` and refuses the header
+                // outright when one is missing. See
+                // {@see ColumnPermissions::searchableItems()}.
+                searchableItems: ColumnPermissions::searchableItems($columns),
             ),
             permissions: $permissions,
             numericFields: $cells->numericFields(),

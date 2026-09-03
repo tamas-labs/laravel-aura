@@ -13,6 +13,7 @@ use TamasLabs\Aura\Cell\CellConfig;
 use TamasLabs\Aura\Cell\CellRules;
 use TamasLabs\Aura\Contracts\AuraOption;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
+use TamasLabs\Aura\Support\JsonMap;
 
 /**
  * One column of the table — which is to say one header cell.
@@ -271,6 +272,9 @@ final class Column
      * The options offered by the filter dropdown.
      *
      * Inferred from a `BackedEnum` cast; pass them here for anything else.
+     * A list means the value *is* the label; a map means value → label — with
+     * the one exception PHP cannot represent, keys running `0, 1, 2…`, which
+     * {@see self::elementsMap()} exists for.
      *
      * @param  array<string|int, string|int>|list<string|int>  $elements
      */
@@ -283,11 +287,32 @@ final class Column
      * Filter options built from a backed enum, whether or not the model casts
      * to it. Labels come from {@see AuraOption}.
      *
+     * Always a value → label map, including for an enum backed by `0, 1` —
+     * which is the one case {@see self::elements()} cannot express, see
+     * {@see self::elementsMap()}.
+     *
      * @param  class-string<BackedEnum>  $enum
      */
     public function options(string $enum): self
     {
-        return $this->elements(Inference::elementsFrom($enum));
+        return $this->set('elements', Inference::elementsFrom($enum));
+    }
+
+    /**
+     * The filter options as an explicit value → label map.
+     *
+     * {@see self::elements()} takes both shapes the contract allows — a list of
+     * values, or a map of value → label — but PHP cannot tell the two apart
+     * when the keys are `0, 1, 2…`: it normalises the string key `'0'` to the
+     * integer `0`, and `[0 => 'No', 1 => 'Yes']` is then the same array as
+     * `['No', 'Yes']`. Sent as the second, the filter would ask the server for
+     * the label. This method says which one was meant.
+     *
+     * @param  array<array-key, string|int>  $elements
+     */
+    public function elementsMap(array $elements): self
+    {
+        return $this->set('elements', JsonMap::from($elements));
     }
 
     /**

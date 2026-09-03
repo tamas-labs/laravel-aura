@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace TamasLabs\Aura\Cell\Concerns;
 
 use TamasLabs\Aura\Cell\Condition;
+use TamasLabs\Aura\Support\JsonMap;
 
 /**
  * A value → settings lookup, applied per row.
@@ -26,10 +27,14 @@ trait HasMapping
     /**
      * The lookup table, keyed by the field's value.
      *
-     * @param  array<string, array<string, mixed>>  $mapping
+     * Emitted as a JSON object whatever the keys look like — see
+     * {@see JsonMap}, which is what keeps a `0` / `1` map from going out as a
+     * two-element array that Aura refuses.
+     *
+     * @param  array<array-key, array<string, mixed>>  $mapping
      */
     public function mapping(array $mapping): static
     {
-        return $this->set('mapping', $mapping);
+        return $this->set('mapping', JsonMap::from($mapping));
     }
 }

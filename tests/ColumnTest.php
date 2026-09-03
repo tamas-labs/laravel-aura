@@ -8,6 +8,7 @@ use TamasLabs\Aura\Table\Inference;
 use TamasLabs\Aura\Table\Presets\Money;
 use TamasLabs\Aura\Table\Presets\Options;
 use TamasLabs\Aura\Table\Presets\Timestamp;
+use TamasLabs\Aura\Tests\Fixtures\Flag;
 use TamasLabs\Aura\Tests\Fixtures\LegacyUser;
 use TamasLabs\Aura\Tests\Fixtures\Status;
 use TamasLabs\Aura\Tests\Fixtures\Tier;
@@ -78,15 +79,43 @@ it('does not offer a range on a column with no search input', function (): void 
 it('infers the filter options from an enum cast', function (): void {
     $cell = cell(Column::make('status')->filterable());
 
-    expect($cell['elements'])->toBe(['active' => 'Aktív', 'suspended' => 'Felfüggesztett']);
+    expect($cell['elements'])->toEqual((object) ['active' => 'Aktív', 'suspended' => 'Felfüggesztett']);
 
     assertMatchesAuraHeader([$cell]);
+});
+
+it('emits filter options keyed 0/1 as an object, not as a list of labels', function (): void {
+    // `elements` takes both shapes the contract allows — a list of values, or a
+    // map of value → label — and PHP cannot tell them apart when the keys run
+    // 0…n-1. As a list the filter would ask the server for the *label*: a WHERE
+    // on 'Nem' against an integer column, which is silently no rows rather than
+    // an error.
+    $cell = cell(Column::make('flag')->filterable()->options(Flag::class));
+
+    expect(json_encode($cell['elements']))->toBe('{"0":"Nem","1":"Igen"}');
+});
+
+it('keeps a list of options a list', function (): void {
+    // The other half of the same ambiguity: a list means the value *is* the
+    // label, and turning that one into an object would send 0 and 1 as the
+    // filter values.
+    $cell = cell(Column::make('flag')->filterable()->elements(['Nem', 'Igen']));
+
+    expect(json_encode($cell['elements']))->toBe('["Nem","Igen"]');
+
+    assertMatchesAuraHeader([$cell]);
+});
+
+it('says which shape was meant when the keys run 0, 1, 2', function (): void {
+    $cell = cell(Column::make('flag')->filterable()->elementsMap([0 => 'Nem', 1 => 'Igen']));
+
+    expect(json_encode($cell['elements']))->toBe('{"0":"Nem","1":"Igen"}');
 });
 
 it('infers through a relation one level deep', function (): void {
     $cell = cell(Column::make('company.tier')->filterable());
 
-    expect($cell['elements'])->toBe(['free_trial' => 'Free Trial', 'paid' => 'Paid']);
+    expect($cell['elements'])->toEqual((object) ['free_trial' => 'Free Trial', 'paid' => 'Paid']);
 });
 
 it('infers nothing through a relation it cannot follow', function (): void {
@@ -96,11 +125,11 @@ it('infers nothing through a relation it cannot follow', function (): void {
 });
 
 it('names enum cases itself when the enum does not', function (): void {
-    expect(Inference::elementsFrom(Tier::class))->toBe(['free_trial' => 'Free Trial', 'paid' => 'Paid']);
+    expect(Inference::elementsFrom(Tier::class))->toEqual((object) ['free_trial' => 'Free Trial', 'paid' => 'Paid']);
 });
 
 it('takes the labels from the enum when it offers them', function (): void {
-    expect(Inference::elementsFrom(Status::class))->toBe(['active' => 'Aktív', 'suspended' => 'Felfüggesztett']);
+    expect(Inference::elementsFrom(Status::class))->toEqual((object) ['active' => 'Aktív', 'suspended' => 'Felfüggesztett']);
 });
 
 it('lets an explicit setting win over the inferred one', function (): void {
@@ -119,7 +148,7 @@ it('infers nothing at all when inference is turned off', function (): void {
 it('offers enum options on a column the model does not cast', function (): void {
     $cell = cell(Column::make('plan')->filterable()->options(Tier::class));
 
-    expect($cell['elements'])->toBe(['free_trial' => 'Free Trial', 'paid' => 'Paid']);
+    expect($cell['elements'])->toEqual((object) ['free_trial' => 'Free Trial', 'paid' => 'Paid']);
 });
 
 it('applies a preset', function (): void {
@@ -157,7 +186,7 @@ it('builds a filter from an enum through the options preset', function (): void 
 
     expect($cell['filterable'])->toBeTrue()
         ->and($cell['align'])->toBe('center')
-        ->and($cell['elements'])->toBe(['free_trial' => 'Free Trial', 'paid' => 'Paid']);
+        ->and($cell['elements'])->toEqual((object) ['free_trial' => 'Free Trial', 'paid' => 'Paid']);
 });
 
 it('accepts a macro on the builder', function (): void {

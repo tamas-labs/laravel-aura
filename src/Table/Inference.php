@@ -7,7 +7,9 @@ namespace TamasLabs\Aura\Table;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use stdClass;
 use TamasLabs\Aura\Contracts\AuraOption;
+use TamasLabs\Aura\Support\JsonMap;
 use TamasLabs\Aura\Support\Relations;
 
 /**
@@ -72,10 +74,14 @@ final class Inference
      * from its case names; implementing the interface is how the wording, and
      * the translation, becomes yours.
      *
+     * It is a value → label *object*, never a list: `elements` accepts both
+     * shapes and reads a list as "the value is the label", so an enum backed by
+     * `0, 1` would otherwise filter for the text `No` instead of for `0`. PHP
+     * cannot hold that distinction in an array — see {@see JsonMap}.
+     *
      * @param  class-string<BackedEnum>  $enum
-     * @return array<string, string>
      */
-    public static function elementsFrom(string $enum): array
+    public static function elementsFrom(string $enum): stdClass
     {
         $elements = [];
 
@@ -85,7 +91,7 @@ final class Inference
                 : Str::headline($case->name);
         }
 
-        return $elements;
+        return JsonMap::from($elements);
     }
 
     /**

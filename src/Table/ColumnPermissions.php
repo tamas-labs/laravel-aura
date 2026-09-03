@@ -30,7 +30,10 @@ final class ColumnPermissions
         // The global search is resolved first so that a multi-field column
         // which is both searched globally and sortable reports the more
         // specific of the two mistakes, as it always has.
-        $globalSearch = self::globalSearchFields($columns);
+        $globalSearch = array_map(
+            static fn (array $pair): string => $pair['query'],
+            self::globalSearchFields($columns),
+        );
 
         $sortable = [];
         $searchable = [];
@@ -59,15 +62,35 @@ final class ColumnPermissions
     }
 
     /**
-     * The fields the global search covers.
+     * The item fields the header publishes as `settings.searchableItems`.
      *
-     * The header publishes this same list as `settings.searchableItems`, and it
-     * does so by reading it back off the whitelist rather than recomputing it —
-     * `header.settings.searchableItems` and what the query layer accepts are
-     * the same array or the toolbar offers a search the server refuses.
+     * Not the same list as the whitelist above, and deliberately so. Aura reads
+     * this one out of the *rows* — `validateHeaderSettings` refuses an entry
+     * that is not the `field` of a header cell, and the client-side global
+     * search resolves it against the item — while the whitelist names what the
+     * query layer puts in a `WHERE`. For a rendered column the two differ:
+     * a `role_name` cell with `->reference('roles.name')` publishes the first
+     * and searches the second.
      *
      * @param  list<ResolvedColumn>  $columns
      * @return list<string>
+     *
+     * @throws InvalidDefinition When a multi-field column joins the global search.
+     */
+    public static function searchableItems(array $columns): array
+    {
+        return array_map(
+            static fn (array $pair): string => $pair['item'],
+            self::globalSearchFields($columns),
+        );
+    }
+
+    /**
+     * The columns in the global search, each as the pair of names it goes out
+     * under: `item` for the browser, `query` for the server.
+     *
+     * @param  list<ResolvedColumn>  $columns
+     * @return list<array{item: string, query: string}>
      *
      * @throws InvalidDefinition When a multi-field column joins the global search.
      */
@@ -80,13 +103,19 @@ final class ColumnPermissions
                 continue;
             }
 
-            $field = $resolved->field();
+            $item = $resolved->field();
 
-            if ($field === null) {
+            // The header half is asserted first: a multi-field column can name
+            // a reference for the query and still have nothing to publish as a
+            // searchable item, and that is the more specific mistake.
+            if ($item === null) {
                 throw InvalidDefinition::multiFieldInGlobalSearch($resolved->key() ?? '');
             }
 
-            $fields[] = $field;
+            $fields[] = [
+                'item' => $item,
+                'query' => $resolved->operableField('globalSearch'),
+            ];
         }
 
         return $fields;

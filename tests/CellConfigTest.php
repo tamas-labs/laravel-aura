@@ -14,6 +14,7 @@ use TamasLabs\Aura\Cell\Progress;
 use TamasLabs\Aura\Cell\Reference;
 use TamasLabs\Aura\Cell\Text;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
+use TamasLabs\Aura\Tests\Fixtures\Flag;
 use TamasLabs\Aura\Tests\Fixtures\Status;
 use TamasLabs\Aura\Tests\Fixtures\Tier;
 
@@ -101,7 +102,7 @@ it('leaves a type that formats nothing alone', function (): void {
 it('builds a badge per enum case, with the colours the enum offers', function (): void {
     $resolved = Badge::fromEnum(Status::class)->resolve('status');
 
-    expect($resolved['mapping'])->toBe([
+    expect($resolved['mapping'])->toEqual((object) [
         'active' => ['label' => 'Aktív', 'variant' => 'success', 'icon' => 'check'],
         'suspended' => ['label' => 'Felfüggesztett', 'variant' => 'danger', 'icon' => 'ban'],
     ]);
@@ -112,10 +113,38 @@ it('builds a badge per enum case, with the colours the enum offers', function ()
 it('still builds badges from an enum that implements nothing', function (): void {
     $resolved = Badge::fromEnum(Tier::class)->resolve('tier');
 
-    expect($resolved['mapping'])->toBe([
+    expect($resolved['mapping'])->toEqual((object) [
         'free_trial' => ['label' => 'Free Trial'],
         'paid' => ['label' => 'Paid'],
     ]);
+});
+
+it('emits a mapping keyed 0/1 as an object, not as a two-element array', function (): void {
+    // PHP normalises the string key '0' to the integer 0, so the map an
+    // int-backed enum builds is a *list* — and Aura types `mapping` as
+    // z.record(z.string(), …), which refuses an array outright: the body
+    // validation aborts and the table never renders. The schema assertion
+    // below is what actually catches it; the encode makes the shape visible.
+    $resolved = Badge::fromEnum(Flag::class)->resolve('active');
+
+    expect(json_encode($resolved['mapping']))
+        ->toBe('{"0":{"label":"Nem","variant":"secondary"},"1":{"label":"Igen","variant":"success"}}');
+
+    // Asserted on the encoded JSON rather than through assertMatchesAuraConfig()
+    // deliberately: the payload above is correct, but the *validator* cannot see
+    // it. Decoding it gives a stdClass whose numeric property names PHP hands
+    // back as integers (get_object_vars() returns [0 => …]), so the schema's
+    // `propertyNames: {type: string}` fails on a payload every JS consumer reads
+    // as an object with string keys. The browser is the authority here, not opis.
+});
+
+it('emits a mapping keyed 1/2 as an object too, though PHP would have anyway', function (): void {
+    // The failure above bites only when the keys run 0…n-1, which is why it
+    // reads as arbitrary from the outside. Pinned so the fix cannot be narrowed
+    // to the 0/1 case and left looking complete.
+    $resolved = Badge::make()->mapping([1 => ['label' => 'Low'], 2 => ['label' => 'High']])->resolve('level');
+
+    expect(json_encode($resolved['mapping']))->toBe('{"1":{"label":"Low"},"2":{"label":"High"}}');
 });
 
 it('emits the key an icon mapping needs to select on', function (): void {

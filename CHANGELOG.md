@@ -8,6 +8,13 @@ version is independent of the package version.
 
 ### Added
 
+- **`Column::elementsMap(array $elements)` — the filter options as an explicit value → label map.**
+  `elements()` takes both shapes the contract allows (a list, where the value *is* the label, and a
+  value → label map), and PHP cannot tell them apart when the keys run `0, 1, 2…`: it normalises the
+  string key `'0'` to the integer `0`, so `[0 => 'No', 1 => 'Yes']` **is** `['No', 'Yes']`. This
+  method says which one was meant. `options()` and the cast inference emit the map on their own, so
+  it is only needed for a hand-written one.
+
 - **Error log ingestion (F7): the server side of Aura's built-in `errorReporting`.** Aura POSTs
   an ECS-format error log to an arbitrary endpoint; until now, the host application had to write
   that endpoint, and a host that did not write it caused its table to silently swallow its own
@@ -83,6 +90,31 @@ version is independent of the package version.
   truths.
 
 ### Fixed
+
+- **The global search whitelisted the rendered field instead of the reference.**
+  `ColumnPermissions` resolved the other three operations as Aura does (`reference || field || key`)
+  but read the raw `field` for the global search, so a column such as
+  `Column::make('company_name')->reference('company.name')->globalSearch()` put `company_name` in the
+  `WHERE` — an `Unknown column` on every global search, and the reason such a column had to be left
+  out of the toolbar's search altogether.
+
+  The fix is not the same list resolved differently: **the global search publishes two names,
+  because it has two consumers.** `header.settings.searchableItems` keeps the rendered field —
+  Aura's `validateHeaderSettings` refuses an entry that is not the `field` of a header cell and
+  aborts the whole header, and in client-side mode it resolves the entry against the row — while the
+  whitelist now names the reference, which is what reaches the database. The header list is
+  therefore no longer the whitelist's own array; `ColumnPermissions::searchableItems()` is the
+  browser-facing projection of the same columns.
+
+- **A `mapping` or `elements` keyed `0, 1` went out as a JSON array.** PHP normalises the string
+  key `'0'` to the integer `0`, so the map an int-backed enum builds — the classic `0 => No`,
+  `1 => Yes` flag — encoded as a list. Aura types `mapping` as `z.record(z.string(), …)` and refuses
+  an array outright: the body validation aborts and **the table does not render**. `elements`
+  accepts both shapes, so there the failure was silent instead — a list means the value is the
+  label, and the filter asked the server for `No` rather than for `0`. Both now go out as objects
+  (`TamasLabs\Aura\Support\JsonMap`), which is why `Badge::fromEnum()` on an int-backed enum works
+  at all. It bit exactly when the keys formed the sequence `0…n-1`; an enum backed by `1, 2` encoded
+  as an object already, which is what made the failure look arbitrary.
 
 - **All four CI matrix legs were red — discovered as a side effect of P7.** Three independent
   causes, none visible in the repository:

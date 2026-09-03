@@ -155,6 +155,45 @@ it('whitelists the reference over the column own field', function (): void {
     expect(array_column(auraDigArray($response, 'items'), 'last_name'))->toBe(['Hopper', 'Lovelace', 'Turing']);
 });
 
+it('publishes the global search under the browser\'s name and searches the database\'s', function (): void {
+    // A rendered column: the row carries `company_name`, the database knows
+    // `company.name`. The two lists have different consumers and so different
+    // names — Aura matches `searchableItems` against a header cell's `field`
+    // and resolves it against the item, while the whitelist is what ends up in
+    // a WHERE. Sending the reference to the browser fails the header validation
+    // outright; sending the field to the query layer is `Unknown column`.
+    $table = auraTable([
+        Column::make('company_name', 'Company')->reference('company.name')->globalSearch(),
+    ]);
+
+    expect(auraDig($table->definition(), 'header', 'settings', 'searchableItems'))->toBe(['company_name'])
+        ->and($table->permissions()->globalSearch)->toBe(['company.name']);
+});
+
+it('runs a global search over a column the rows name differently', function (): void {
+    // The end-to-end half of the test above: before the whitelist named the
+    // reference, this query was `where typed_users.company_name like …`.
+    $response = auraTable([
+        Column::make('company_name', 'Company')->reference('company.name')->globalSearch(),
+    ])->respond(auraHttpRequest(['page' => 1, 'paginate' => 10, 'globalSearch' => 'Globex']));
+
+    expect(array_column(auraDigArray($response, 'items'), 'last_name'))->toBe(['Hopper']);
+});
+
+it('publishes only searchable items Aura can match to a header cell', function (): void {
+    // validateHeaderSettings refuses an item that is not the `field` of some
+    // header cell, and it does not fall back — one unmatched entry aborts the
+    // whole header and replaces the table with the error UI.
+    $definition = (new UserTable)->definition();
+
+    $fields = array_values(array_filter(array_map(
+        static fn (array $cell): mixed => $cell['field'] ?? null,
+        auraCells($definition),
+    ), is_string(...)));
+
+    expect(auraDig($definition, 'header', 'settings', 'searchableItems'))->each->toBeIn($fields);
+});
+
 it('sorts a multi-field column by its reference', function (): void {
     $response = (new UserTable)->respond(auraHttpRequest([
         'page' => 1,

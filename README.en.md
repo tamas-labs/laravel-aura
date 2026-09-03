@@ -334,12 +334,21 @@ Column::actions('id', Action::edit())        // the resource links — see Actio
 | `globalSearch()` | include the field in the toolbar's global search |
 | `reference('other_field')` | operate on a different field than the one rendered |
 | `elements([...])` / `options(Enum::class)` | the filter dropdown's options |
+| `elementsMap([...])` | the same options as an explicit value → label map |
 | `selectable()` | render the row-selection checkboxes here |
 | `show(false)` / `hidden()` | start hidden — presentation, never authorisation |
 
 `reference()` is how a rendered column sorts by an underlying one: a full-name column sorts by
 `last_name`. Aura resolves the field it sends as `reference || field || key`, and the whitelist
 follows the same order, so the reference — not the rendered field — is what the query accepts.
+
+The global search is the one place where two names are published rather than one, because it has
+two consumers. `header.settings.searchableItems` names the **rendered** field: Aura matches every
+entry against the `field` of a header cell and refuses the whole header when one is unmatched, and
+in client-side mode it resolves the entry against the row. The whitelist names the **reference**,
+because that is what ends up in a `WHERE`. For a `company_name` column with
+`->reference('company.name')` the browser is told `company_name` and the query runs on
+`company.name`.
 
 `hidden()` is not a permission. A hidden column is one the user can switch back on; a column
 nobody may see must not be in `columns()` at all.
@@ -430,6 +439,13 @@ the labels are what the user reads. An enum that has *not* implemented the inter
 produces a usable list from its case names, so this buys wording, not behaviour.
 
 For an enum the model does not cast to, ask for it directly: `->options(Status::class)`.
+
+`elements()` accepts both shapes the contract allows: a list, where the value *is* the label, and a
+map of value → label. PHP cannot tell the two apart when the keys run `0, 1, 2…` — it normalises the
+string key `'0'` to the integer `0`, so `[0 => 'No', 1 => 'Yes']` is the same array as
+`['No', 'Yes']` and would go out as a list, making the filter ask the server for the label. Say
+which one you mean with `elementsMap([0 => 'No', 1 => 'Yes'])`. `options()` and the cast inference
+always emit the map, so an enum backed by `0` and `1` needs nothing extra.
 
 Options come from the enum's cases rather than from the loaded rows. That is the difference that
 matters: options derived from the current page cannot offer a status nobody has yet.
@@ -614,6 +630,9 @@ these classes is marked `@internal` and is not covered by the version promise.
 **Mapping** — on `Reference`, `Badge`, `Link`, `Button`, `Icon` and `Custom`: `mapping(array
 $mapping)` is a lookup table keyed by the field's value, each entry a set of settings for that
 value. `Progress` has one too, with its own semantics — the keys are ranges (`"0-25"`), not values.
+A mapping is always emitted as a JSON object, including the `0` / `1` keys an int-backed enum
+produces: Aura types the slot as `z.record(z.string(), …)` and refuses an array, which would abort
+the whole body validation.
 
 **Routes** — on `Link`, `Button`, `Icon` and `Modal`: `route(string $route)`, described under
 [Routes](#routes).

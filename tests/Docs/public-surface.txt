@@ -106,6 +106,7 @@ Column::currency
 Column::date
 Column::datetime
 Column::elements
+Column::elementsMap
 Column::filterable
 Column::globalSearch
 Column::heading
