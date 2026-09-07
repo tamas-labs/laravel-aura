@@ -12,6 +12,7 @@ use TamasLabs\Aura\Table\ColumnGroup;
 use TamasLabs\Aura\Table\Footer;
 use TamasLabs\Aura\Table\TableSettings;
 use TamasLabs\Aura\Tests\Fixtures\CachedTable;
+use TamasLabs\Aura\Tests\Fixtures\CountingTable;
 use TamasLabs\Aura\Tests\Fixtures\Status;
 use TamasLabs\Aura\Tests\Fixtures\TypedCompany;
 use TamasLabs\Aura\Tests\Fixtures\TypedUser;
@@ -414,4 +415,40 @@ it('passes the selected ids through to the caller', function (): void {
     );
 
     expect($request->selected)->toBe([1, 3]);
+});
+
+it('asks for the query once per request', function (): void {
+    CountingTable::$queries = 0;
+
+    $response = (new CountingTable)->respond(auraHttpRequest(['page' => 1, 'paginate' => 2]));
+
+    // The definition reads the model off the builder the request already has;
+    // a `query()` that scopes to a tenant or logs must not run twice for it.
+    expect(CountingTable::$queries)->toBe(1)
+        ->and(auraDigArray($response, 'items'))->toHaveCount(2)
+        ->and(auraDig($response, 'header', 'rows', 0, 'cells', 2, 'content'))->toBe('Company');
+});
+
+it('asks for the query once per request with the definition cached too', function (): void {
+    CountingTable::$queries = 0;
+
+    (new CountingTable(cached: true))->respond(auraHttpRequest(['page' => 1, 'paginate' => 2]));
+
+    $warm = CountingTable::$queries;
+
+    (new CountingTable(cached: true))->respond(auraHttpRequest(['page' => 1, 'paginate' => 2]));
+
+    expect($warm)->toBe(1)
+        ->and(CountingTable::$queries)->toBe(2);
+});
+
+it('resolves the model once when the definition is asked for on its own', function (): void {
+    CountingTable::$queries = 0;
+
+    $table = new CountingTable;
+
+    $table->definition();
+    $table->permissions();
+
+    expect(CountingTable::$queries)->toBe(1);
 });

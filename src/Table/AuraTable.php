@@ -123,6 +123,24 @@ abstract class AuraTable
     private ?array $entries = null;
 
     /**
+     * The model the definition is described against, resolved once.
+     *
+     * Column inference reads casts and relations off a model, and the only
+     * place a table names one is {@see self::query()}. Asking for a second
+     * builder just to reach `getModel()` would run `query()` twice per request,
+     * and a `query()` that reads the current user, counts or logs would do all
+     * of that twice; {@see self::respond()} therefore fills this in from the
+     * builder the request already has.
+     *
+     * Sharing that model with the builder about to be paginated is safe in both
+     * directions: {@see AuraQuery} mutates the *builder* — wheres, orders,
+     * subqueries — never the model, and the definition only ever reads from it.
+     *
+     * @var TModel|null
+     */
+    private ?Model $model = null;
+
+    /**
      * The query the table pages through. Constraints that are always true —
      * scoping to a tenant, eager loads — belong here.
      *
@@ -200,11 +218,17 @@ abstract class AuraTable
      */
     public function respond(Request $request): array
     {
+        // One `query()` per request. The definition needs the model this
+        // builder already carries, not a builder of its own — see
+        // {@see self::$model} for why handing it this one is safe.
+        $query = $this->query();
+        $this->model ??= $query->getModel();
+
         $blueprint = $this->blueprint();
 
         $aura = AuraRequest::fromHttp($request, $blueprint->permissions);
 
-        $paginator = AuraQuery::paginate($this->query(), $aura);
+        $paginator = AuraQuery::paginate($query, $aura);
 
         $data = AuraPayload::fromPaginator($paginator, $this->transform(...))->toArray();
 
@@ -352,7 +376,7 @@ abstract class AuraTable
 
         $builder = new DefinitionBuilder(
             entries: $entries,
-            model: $this->query()->getModel(),
+            model: $this->model(),
             settings: $this->settings(),
             footer: $this->footer(),
             rowRules: $this->rowRules(),
@@ -370,5 +394,19 @@ abstract class AuraTable
     private function entries(): array
     {
         return $this->entries ??= $this->columns();
+    }
+
+    /**
+     * The model the definition is built against, memoised for the request.
+     *
+     * Only reached when nothing has filled {@see self::$model} in yet — a
+     * {@see self::definition()} or {@see self::permissions()} call on its own,
+     * where there is no request builder to take it from.
+     *
+     * @return TModel
+     */
+    private function model(): Model
+    {
+        return $this->model ??= $this->query()->getModel();
     }
 }

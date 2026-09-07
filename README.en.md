@@ -254,6 +254,10 @@ That is the whole endpoint. Aura fetches with `POST` by default, so route it acc
 `query()` is where constraints that are always true belong — tenant scoping, eager loads, a
 `withTrashed()`. Everything the user chooses is applied on top of it.
 
+**It is called once per `respond()`**, so it is free to do work — read the current user, count
+something, write a log line. The definition needs a model rather than a query of its own, and it
+reads that model off the builder the request already has.
+
 <a id="generating-one"></a>
 ### Generating one
 

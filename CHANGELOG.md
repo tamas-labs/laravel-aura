@@ -144,6 +144,21 @@ version is independent of the package version.
 
 ### Fixed
 
+- **A `respond()` kétszer hívta a `query()`-t (audit M1).** A definíció felépítése a modellhez
+  `$this->query()->getModel()`-t kért, a lapozás pedig ettől függetlenül egy másik buildert
+  (`AuraQuery::paginate($this->query(), …)`). A `query()` a hoszt alkalmazás metódusa, és
+  szabadon dolgozik benne — tenant-szűkítés, `Auth::user()` olvasás, számláló, naplósor —, tehát
+  minden ilyen mellékhatás kérésenként **kétszer** futott le. Bekapcsolt definíció-cache mellett
+  egyszer, kikapcsolva (ez az alapértelmezés) kétszer.
+
+  A `respond()` mostantól egyszer építi a buildert, és a definíció ennek a modelljét kapja meg.
+  A megosztás mindkét irányban biztonságos: az `AuraQuery` a *buildert* mutálja — where-ek,
+  rendezés, korrelált alkérdés —, a modellt soha, a definíció pedig csak olvas belőle (cast-ok,
+  relációk). Egy önálló `definition()` + `permissions()` páros szintén egyetlen `query()`-t
+  jelent. **Publikus felületi változás nincs**: a memoizálás privát, a `TableBlueprint` és a
+  kiadott JSON változatlan. Három teszt köti a kódhoz — a kérés útja cache-sel és anélkül, és a
+  definíció önálló lekérdezése.
+
 - **The error ingest answered 500 when the store failed — the one answer that cannot terminate.**
   The endpoint's whole design rests on never returning a non-2xx that a retry cannot resolve: Aura
   retries a failed batch four times, puts it back at the *front* of its queue and repeats it behind

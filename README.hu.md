@@ -256,6 +256,10 @@ Ennyi a végpont. Az Aura alapértelmezésben `POST`-tal kér, ezért így vedd 
 A `query()`-be azok a megszorítások valók, amik mindig igazak — tenant-szűkítés, eager load, egy
 `withTrashed()`. Amit a felhasználó választ, arra épül rá.
 
+**Kérésenként egyszer hívjuk**, tehát nyugodtan dolgozhat benne: olvashatja a bejelentkezett
+felhasználót, számolhat, naplózhat. A definíciónak modellre van szüksége, nem külön lekérdezésre,
+és ezt a modellt abból a builderből veszi, amit a kérés amúgy is felépít.
+
 <a id="generalas"></a>
 ### Generálás
 
