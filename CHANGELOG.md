@@ -298,6 +298,25 @@ version is independent of the package version.
 
 ### Fixed
 
+- **A követelménylista a PHP 8.5-ről az ellenkezőjét állította annak, amit a CI csinál (audit M9).**
+  Mindkét teljes README azt írta, hogy „a CI-mátrix 8.3-at és 8.4-et futtat; a constraint a 8.5-öt
+  is engedi, az még nincs tesztelve”, miközben a `ci.yml` 8.3 / 8.4 / 8.5 × Laravel 12 / 13-at
+  futtat — és ugyanannak a fájlnak az eszközlánc-fejezete négy képernyővel lejjebb már helyesen
+  mondta. Semmi nem fogta meg: a `DocsCoverageTest` metódusneveket keres, a meglévő constraint-teszt
+  pedig a `^8.3`-at illeszti, ami nem mozdul, amikor a mátrix bővül.
+
+  Két új teszt a `VersioningTest`-ben, mindkettő közvetlenül a `ci.yml` mátrixából olvas:
+
+  - **a PHP-sor pontosan azokat a verziókat nevezi meg, amiket a CI futtat, és a puszta
+    felsorolással végződik.** A második fele nem díszítés: nélküle a teszt átment volna az eredeti
+    hibás mondaton is, ami a *helyes halmazt* sorolta fel, és csak utána mondta az egyikről, hogy
+    nincs tesztelve. Mindkét nyelvű sor ezért a listával zár.
+  - **a mátrix Laravel-majorjai pontosan azok, amiket a manifest enged.** Ez a tükörkép: egy
+    mátrixba felvett major, amit a `composer.json` nem enged, olyat tesztel, amit a csomag nem
+    ígér; a fordítottja olyat ígér, amit semmi nem tesztel.
+
+  Mindhárom sodródási irány mutációval ellenőrizve.
+
 - **A `Column::actions()` docblockja olyan ellenőrzést állított, ami nincs (audit M2).** A szöveg
   szerint a definíció felépítésekor „mindkettő ellenőrzött": hogy más oszlop nem viszi ugyanazt a
   kulcsot, **és** hogy a placeholder által megnevezett mező eljut a böngészőig a sorokban. Az első

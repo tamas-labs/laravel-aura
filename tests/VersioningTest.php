@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Assert;
 use Symfony\Component\Yaml\Yaml;
 use TamasLabs\Aura\AuraContract;
@@ -58,6 +59,20 @@ function auraWorkflow(string $file = 'ci.yml'): array
 
     /** @var array<string, mixed> $workflow */
     return $workflow;
+}
+
+/**
+ * One line of a README's requirement list, by its bolded label.
+ */
+function auraRequirementLine(string $readme, string $label): string
+{
+    foreach (explode("\n", auraPackageFile($readme)) as $line) {
+        if (str_starts_with($line, '- **'.$label.'**')) {
+            return $line;
+        }
+    }
+
+    Assert::fail("{$readme} has no {$label} line in its requirement list.");
 }
 
 /**
@@ -118,6 +133,60 @@ it('requires one constraint for every Illuminate component', function () {
 
     expect($components)->not->toBeEmpty()
         ->and($constraints)->toHaveCount(1);
+});
+
+it('names the PHP versions CI actually runs', function () {
+    // The requirement list claimed the matrix tested "8.3 and 8.4; the
+    // constraint allows 8.5, which is not tested yet" while `ci.yml` had been
+    // running 8.5 for some time — in both languages, and with the same file's
+    // tooling section saying 8.3/8.4/8.5 four screens further down. Nothing
+    // caught it: `DocsCoverageTest` matches method names, and the constraint
+    // test above matches `^8.3`, which does not move when the matrix grows.
+    // So the sentence is read against the matrix instead.
+    $matrix = array_values(array_map(
+        static fn (mixed $version): string => is_scalar($version) ? (string) $version : '',
+        auraDigArray(auraWorkflow(), 'jobs', 'test', 'strategy', 'matrix', 'php'),
+    ));
+
+    $list = implode(', ', $matrix);
+
+    // Guard the guard: an empty matrix would make both assertions below vacuous.
+    if ($list === '') {
+        Assert::fail('ci.yml declares no PHP version matrix.');
+    }
+
+    foreach (['README.en.md', 'README.hu.md'] as $readme) {
+        // Only the prose after the em dash: the `^8.3` in front of it is the
+        // floor, which the constraint test already owns and which is allowed to
+        // sit below the lowest version CI runs.
+        $claim = Str::after(auraRequirementLine($readme, 'PHP'), '—');
+
+        preg_match_all('/\d+\.\d+/', $claim, $found);
+
+        // Two assertions, because the first alone would have passed on the
+        // sentence this test exists for: "tests 8.3 and 8.4; the constraint
+        // allows 8.5, which is not tested yet" names the right *set* and then
+        // disclaims one of them. Ending the line with the bare list is what
+        // leaves nowhere for a claim about a version to hide.
+        expect(array_values(array_unique($found[0])))
+            ->toBe($matrix, "{$readme} does not name the PHP versions ci.yml runs")
+            ->and(rtrim($claim))->toEndWith($list);
+    }
+});
+
+it('runs every Laravel major the manifest allows, and no other', function () {
+    // The mirror image of the drift above: a major added to the matrix without
+    // widening `composer.json` tests what the package does not claim, and one
+    // added to the manifest without a leg claims what nothing tests. Both
+    // requirement lists quote that constraint verbatim.
+    $matrix = array_values(array_map(
+        static fn (mixed $version): string => is_scalar($version) ? (string) $version : '',
+        auraDigArray(auraWorkflow(), 'jobs', 'test', 'strategy', 'matrix', 'laravel'),
+    ));
+
+    preg_match_all('/\^(\d+)\./', auraRequires('illuminate/support'), $allowed);
+
+    expect($matrix)->toBe($allowed[1]);
 });
 
 it('leaves the package version to the git tag', function () {

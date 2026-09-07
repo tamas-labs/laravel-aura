@@ -118,7 +118,7 @@ The package is **not released**: no tag, not on Packagist. Install it from the r
 
 ## Requirements
 
-- **PHP** `^8.3` — the CI matrix tests 8.3 and 8.4; the constraint allows 8.5, which is not tested yet
+- **PHP** `^8.3` — the CI matrix runs 8.3, 8.4, 8.5
 - **Laravel** `^12.0 || ^13.0` — the `illuminate/*` components, not the framework package
 - A database driver Eloquent supports; the test suite runs on SQLite, and the `LIKE` escaping is
   written to behave identically on MySQL/MariaDB, PostgreSQL and SQLite

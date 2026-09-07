@@ -119,7 +119,7 @@ A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telep�
 
 ## Követelmények
 
-- **PHP** `^8.3` — a CI-mátrix 8.3-at és 8.4-et futtat; a constraint a 8.5-öt is engedi, az még nincs tesztelve
+- **PHP** `^8.3` — a CI-mátrix ezeket futtatja: 8.3, 8.4, 8.5
 - **Laravel** `^12.0 || ^13.0` — az `illuminate/*` komponensek, nem a framework-csomag
 - Bármilyen Eloquent által támogatott adatbázis-driver; a teszt-suite SQLite-on fut, a `LIKE`
   escape-elés pedig úgy van megírva, hogy MySQL/MariaDB-n, PostgreSQL-en és SQLite-on egyformán
