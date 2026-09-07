@@ -91,6 +91,23 @@ version is independent of the package version.
 
 ### Fixed
 
+- **The error ingest answered 500 when the store failed — the one answer that cannot terminate.**
+  The endpoint's whole design rests on never returning a non-2xx that a retry cannot resolve: Aura
+  retries a failed batch four times, puts it back at the *front* of its queue and repeats it behind
+  an exponential backoff. `ErrorStore` documented "must not throw", but nothing enforced it, and
+  the shipped `database` driver threw on the most likely first run of the feature — the driver
+  switched on before the published migration has been run. Broken telemetry multiplied its own
+  traffic forever.
+
+  The guarantee now lives where it can be enforced: `ErrorIngestController::dispatch()` catches
+  everything — the store call, the container resolution and the queue dispatch alike — reports it
+  through the application's handler and answers `202` with `stored: 0`. `DatabaseErrorStore` also
+  honours the interface itself: `store()` reports the first failure and stops, so a fault in the
+  storage is not written to the log once per record, and `stored` is the number that actually
+  landed. Its `write()` no longer swallows an insert that failed for a reason other than the
+  deduplication race — with no row under that fingerprint there is nothing to fold into, so the
+  record would have been dropped with no trace of why.
+
 - **A non-scalar `filterable[].values` element was a 500, not a 422.** The request validator bounded
   the array's length but said nothing about its elements, and the contract's schema types them as
   `{}` — so `values: [[1, 2]]` travelled unchanged into `whereIn()` and came back out as

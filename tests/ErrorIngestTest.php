@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
@@ -428,6 +430,99 @@ it('filters the listing by key and severity', function (): void {
         ->expectsOutputToContain('HeaderValidator')
         ->doesntExpectOutputToContain('BodyValidator')
         ->assertSuccessful();
+});
+
+it('answers 202 when the store has no table to write to', function (): void {
+    // The likely first run of the feature: the driver is switched to `database`
+    // and the published migration has not been run yet. A 500 here would be the
+    // worst possible answer — Aura retries a failed batch four times, puts it
+    // back at the front of its queue and repeats it behind an exponential
+    // backoff, so the broken telemetry would multiply its own traffic forever.
+    Exceptions::fake();
+
+    auraEnableIngest(['driver' => 'database']);
+
+    auraPostErrors([auraErrorEntry(), auraErrorEntry(['key' => 'b']), auraErrorEntry(['key' => 'c'])])
+        ->assertStatus(202)
+        ->assertJson(['received' => 3, 'stored' => 0, 'dropped' => 0]);
+
+    // Once, not once per record: what failed is the storage, not the entry, so
+    // the batch stops at the first one instead of writing three copies of one
+    // fault into the log.
+    Exceptions::assertReportedCount(1);
+    Exceptions::assertReported(fn (QueryException $e): bool => true);
+});
+
+it('answers 202 when a bound store throws', function (): void {
+    // The interface says an implementation must not throw, but the interface is
+    // the part of this feature a host application replaces — so the guarantee
+    // is enforced here rather than merely documented there.
+    Exceptions::fake();
+
+    auraEnableIngest();
+
+    app()->bind(ErrorStore::class, fn (): ErrorStore => new class implements ErrorStore
+    {
+        /**
+         * @param  list<AuraErrorRecord>  $records
+         */
+        public function store(array $records): int
+        {
+            throw new RuntimeException('the store is down');
+        }
+    });
+
+    auraPostErrors([auraErrorEntry()])
+        ->assertStatus(202)
+        ->assertJson(['received' => 1, 'stored' => 0, 'dropped' => 0]);
+
+    Exceptions::assertReported(RuntimeException::class);
+});
+
+it('answers 202 when the queue it dispatches to is unreachable', function (): void {
+    // The other branch of dispatch(): with `queue` on, nothing of the store runs
+    // in the request, but handing the job over can fail on its own.
+    Exceptions::fake();
+
+    auraEnableIngest(['driver' => 'database', 'queue' => true]);
+    config()->set('queue.default', 'no-such-connection');
+
+    auraPostErrors([auraErrorEntry()])
+        ->assertStatus(202)
+        ->assertJson(['received' => 1, 'stored' => 0, 'dropped' => 0]);
+
+    Exceptions::assertReportedCount(1);
+});
+
+it('keeps what landed when a write fails part-way through a batch', function (): void {
+    // The insert fails for a reason that is not the deduplication race, so
+    // there is no row to fold into: write() re-raises it rather than dropping
+    // the record silently, store() reports it once and gives up on the rest,
+    // and `stored` is the number that actually landed — not the whole batch,
+    // and not none of it.
+    Exceptions::fake();
+
+    auraEnableIngest(['driver' => 'database']);
+    auraErrorsTable();
+
+    // SQLite is the suite's only driver, and a trigger is the one way to make a
+    // single row's insert fail while the table itself stays healthy.
+    DB::statement(
+        'CREATE TRIGGER aura_boom BEFORE INSERT ON aura_errors '
+        ."WHEN NEW.error_key = 'boom' BEGIN SELECT RAISE(ABORT, 'boom'); END"
+    );
+
+    auraPostErrors([
+        auraErrorEntry(['key' => 'first']),
+        auraErrorEntry(['key' => 'boom']),
+        auraErrorEntry(['key' => 'third']),
+    ])
+        ->assertStatus(202)
+        ->assertJson(['received' => 3, 'stored' => 1, 'dropped' => 0]);
+
+    expect(DB::table('aura_errors')->pluck('error_key')->all())->toBe(['first']);
+
+    Exceptions::assertReportedCount(1);
 });
 
 it('writes through the store when the queued job runs', function (): void {

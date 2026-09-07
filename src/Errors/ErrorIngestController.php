@@ -8,6 +8,7 @@ use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Throwable;
 
 /**
  * The ingest endpoint: one POST, one answer.
@@ -66,6 +67,24 @@ final class ErrorIngestController
      * A queued run cannot report how many records landed, so it answers with
      * the number handed over. That is the honest number at the time of the
      * response — the alternative would be waiting for the job to prove it.
+     *
+     * **Nothing thrown below this line reaches the client.** The interface says
+     * an implementation must not throw, but the interface is the one part of
+     * this feature a host application replaces, and the two shipped stores
+     * still depend on infrastructure that can be missing — the `database`
+     * driver with an unpublished migration is the likely first run, and it is
+     * exactly the case where a 500 would be worst: Aura retries a failed batch
+     * four times, puts it back at the *front* of its queue and repeats it
+     * behind an exponential backoff, so broken telemetry would multiply its own
+     * traffic forever. The guarantee therefore lives here, where it can be
+     * enforced, rather than in the documentation of the interface. Resolving
+     * the store is inside the `try` for the same reason: a misconfigured
+     * binding fails the same way a write does.
+     *
+     * The exception is reported through the application's handler, so it lands
+     * wherever the host already looks for errors. `0` stored is the honest
+     * number — the client is told it was accepted, not that it was written,
+     * which is all a `202` ever promised.
      */
     private function dispatch(ErrorBatch $batch, ErrorIngestConfig $config): int
     {
@@ -73,12 +92,18 @@ final class ErrorIngestController
             return 0;
         }
 
-        if (! $config->queue) {
-            return app(ErrorStore::class)->store($batch->records);
+        try {
+            if (! $config->queue) {
+                return app(ErrorStore::class)->store($batch->records);
+            }
+
+            app(Dispatcher::class)->dispatch(new StoreErrorReport($batch->records));
+
+            return count($batch->records);
+        } catch (Throwable $e) {
+            report($e);
+
+            return 0;
         }
-
-        app(Dispatcher::class)->dispatch(new StoreErrorReport($batch->records));
-
-        return count($batch->records);
     }
 }

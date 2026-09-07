@@ -6,6 +6,7 @@ namespace TamasLabs\Aura\Errors;
 
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Writes records as rows, one per distinct error.
@@ -39,6 +40,15 @@ final readonly class DatabaseErrorStore implements ErrorStore
      * its records the first time and none the second, which is what makes the
      * deduplication visible in the response body.
      *
+     * **This is where the interface's "must not throw" is honoured.** The
+     * driver needs a table the host has to publish and migrate itself, so the
+     * likely first run of the feature is the one where every write raises — and
+     * the record fields are all bounded before they get here, so what fails is
+     * the storage, not the record. That is why the first failure ends the
+     * batch instead of being retried once per record: continuing would write N
+     * copies of one fault into the log. It is reported once, and the count is
+     * what actually landed.
+     *
      * @param  list<AuraErrorRecord>  $records
      */
     public function store(array $records): int
@@ -46,7 +56,13 @@ final readonly class DatabaseErrorStore implements ErrorStore
         $inserted = 0;
 
         foreach ($records as $record) {
-            $inserted += $this->write($record) ? 1 : 0;
+            try {
+                $inserted += $this->write($record) ? 1 : 0;
+            } catch (Throwable $e) {
+                report($e);
+
+                break;
+            }
         }
 
         return $inserted;
@@ -65,19 +81,32 @@ final readonly class DatabaseErrorStore implements ErrorStore
             DB::table($this->config->table)->insert($this->row($record));
 
             return true;
-        } catch (QueryException) {
+        } catch (QueryException $e) {
             // Another request inserted the same fingerprint between the update
             // above and this insert. The unique index is what makes that a lost
             // race rather than a duplicate row — fold into the existing one.
-            $this->touch($record);
+            if ($this->touch($record)) {
+                return false;
+            }
 
-            return false;
+            // No row under that fingerprint, so this was not the race: the
+            // insert failed on its own account. Let it out to store(), which
+            // reports it — swallowing it here would drop the record with no
+            // trace of why.
+            throw $e;
         }
     }
 
     /**
      * Fold a repeat into the row that is already there. Answers whether there
      * was one.
+     *
+     * Impure by design, and the tag is load-bearing: write() calls this twice,
+     * and the second call exists precisely because another request may have
+     * inserted the row in between. Without the tag a static analyser carries
+     * the first `false` forward and calls the second check dead.
+     *
+     * @phpstan-impure
      */
     private function touch(AuraErrorRecord $record): bool
     {

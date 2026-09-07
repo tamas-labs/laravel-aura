@@ -1627,6 +1627,12 @@ Four facts about the client decide everything on this side:
 A malformed entry is dropped and the rest are stored. That is not leniency; it is the only answer
 that terminates.
 
+**A write that fails is a `202` too.** The store is caught in the controller, so a missing table,
+a closed connection or a third-party implementation that raises is reported through the
+application's exception handler and answered with `stored: 0` — never with a `500`. The likely
+first run of the feature is exactly this case: the driver switched to `database` before the
+published migration has been run.
+
 ### Configuration
 
 Every key lives under `aura.errors`:
@@ -1708,7 +1714,9 @@ $this->app->bind(ErrorStore::class, fn () => new SentryErrorStore);
 
 An implementation **must not throw**. The endpoint answers `202` whatever happens to the batch,
 because Aura re-sends anything else forever; an exception here would turn a storage hiccup into an
-unkillable retry loop.
+unkillable retry loop. One that does throw anyway is caught and reported rather than passed on —
+the guarantee is enforced where it can be, not only stated here — but a store that reports its own
+failure says something more useful about it than the endpoint can.
 
 ### Reading it back
 

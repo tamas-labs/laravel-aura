@@ -1645,6 +1645,11 @@ Négy tény a kliensről, ami ezen az oldalon mindent eldönt:
 Egy hibás bejegyzés kiesik, a többi mentésre kerül. Ez nem engedékenység, hanem az egyetlen válasz,
 ami véget ér.
 
+**A sikertelen írás is `202`.** A store hívása a controllerben van elkapva, így egy hiányzó tábla,
+egy megszakadt kapcsolat vagy egy kivételt dobó saját implementáció az alkalmazás
+kivételkezelőjéhez kerül, a válasz pedig `stored: 0` — soha nem `500`. A funkció első futása
+tipikusan pont ez az eset: a driver már `database`, a publikált migráció még nem futott le.
+
 ### Konfiguráció
 
 Minden kulcs az `aura.errors` alatt:
@@ -1726,7 +1731,9 @@ $this->app->bind(ErrorStore::class, fn () => new SentryErrorStore);
 
 Egy implementáció **nem dobhat kivételt**. A végpont `202`-t válaszol, bármi történjék is a
 köteggel, mert az Aura minden mást örökre újraküld; egy kivétel itt egy tárolási zökkenőt
-kiirthatatlan újrapróbálkozási hurokká tenne.
+kiirthatatlan újrapróbálkozási hurokká tenne. Amelyik mégis dob, azt a csomag elkapja és
+lejelenti, nem engedi tovább — a garancia ott van kikényszerítve, ahol lehet, nem csak leírva itt
+—, de a saját hibáját lejelentő store többet tud mondani róla, mint a végpont.
 
 ### Visszaolvasás
 
