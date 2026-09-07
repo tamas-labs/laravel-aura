@@ -8,6 +8,26 @@ version is independent of the package version.
 
 ### Added
 
+- **Pontozott oszlop eager load nélkül: figyelmeztetés a némaság helyett (audit M3).** A
+  `Column::make('company.name')` egy `query(): User::query()` mellett — `->with('company')` nélkül —
+  üres oszlopot renderelt, és semmi nem szólt. Még N+1 sem keletkezett, amin fel lehetne figyelni: a
+  `toArray()` nem tölt be lusta relációt, tehát a kulcs egyszerűen hiányzott minden sorból. A
+  fejlesztő üres oszlopot látott, és a cella-konfigurációt kezdte nézni — azt az egy helyet, ahol a
+  válasz biztosan nincs.
+
+  Bekapcsolt `APP_DEBUG` mellett a `respond()` mostantól mezőnként egy `Log::warning()`-ot ír, ha egy
+  pontozott mezőt, amit a definíció megnevez, a kimenő sorok nem tudnak feloldani — a hiányzó
+  szakaszt és a szokásos okot (`->with('company')`) is megnevezve.
+
+  **Nem a lekérdezés eager loadjait nézi, hanem a kimenő sorokat**, és ettől nincs hamis pozitívja:
+  egy betöltött, de az adott sorra üres reláció a saját kulcsa alatt `null`-t visz, tehát adat és nem
+  hiba; egy `transform()` által kézzel felépített szerkezet és egy `meta.theme`-ként olvasott JSON
+  cast pedig a gyökerét viszi a sorban, tehát szintén néma marad. Csak pontozott útvonalakat vizsgál:
+  egy pont nélküli név hiánya hétköznapi (az `edit_icon` header-mező érték nélkül, egy action-oszlop
+  kulcsa pedig olyan azonosító, amit build időben semmi nem tud ellenőrizni — lásd az M2-t). Soha nem
+  dob, és debug módon kívül semmit nem csinál. Új `@internal` osztály:
+  `TamasLabs\Aura\Response\MissingFields`; a publikus felület nem változik.
+
 - **A tábla eldöntheti, mi megy ki egy sorban: `AuraTable::transform()` és
   `protected bool $onlyDeclaredFields`.** Egy sor eddig kivétel nélkül a *teljes* modell volt —
   minden, amit a `toArray()` kiad —, függetlenül attól, hány oszlopot definiált a tábla. Egyetlen

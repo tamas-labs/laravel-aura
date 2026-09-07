@@ -431,6 +431,41 @@ böngésző `company_name`-et kap, a lekérdezés pedig `company.name`-en fut.
 A `hidden()` **nem jogosultság.** A rejtett oszlopot a felhasználó visszakapcsolhatja; amit senki
 nem láthat, az ne legyen benne a `columns()`-ban.
 
+### Olvasás reláción keresztül
+
+A pontozott mező egy másik soron át olvas: a `Column::make('company.name')` a cég nevét rendereli,
+korrelált alkérdéssel rendez és `whereHas`-szel keres rá. Amit **nem** tesz meg: a relációt nem
+tölti be. Az a `query()` dolga:
+
+```php
+public function query(): Builder
+{
+    return User::query()->with('company');       // ← enélkül az oszlop üres
+}
+```
+
+Ha kimarad, a hiba a lehető legrosszabb módon csendes. A `toArray()` nem tölt be lusta relációt,
+tehát még N+1 sincs, amin fel lehetne figyelni: a kulcs egyszerűen hiányzik minden sorból, az oszlop
+üresen renderelődik, és először a cella-konfigurációt kezded nézni — azt az egy helyet, ahol a válasz
+biztosan nincs.
+
+Ezért a csomag kimondja helyetted. Bekapcsolt `APP_DEBUG` mellett, ha egy oldal sorai nem tudnak
+feloldani egy pontozott mezőt, amit a definíció megnevez, mezőnként egy `warning` kerül a logba:
+
+```
+Aura: App\Tables\UserTable reads "company.name", but the rows carry no "company" — that cell
+renders empty. The usual cause is a missing ->with('company') in query().
+```
+
+Nem a lekérdezés eager loadjait nézi, hanem a sorokat, amik épp kimennének — és pont ettől lesz elég
+csendes ahhoz, hogy bekapcsolva lehessen hagyni. Egy betöltött, de az adott sorra üres reláció a
+saját kulcsa alatt `null`-t visz, arról tehát soha nincs szó. Ahogy arról a pontozott útvonalról sem,
+ami nem is reláció — egy `meta.theme`-ként olvasott JSON cast —, sem arról, amit a `transform()`
+kézzel épített fel: a gyökér ott van a sorban, nincs mit jelenteni. Csak pontozott útvonalakat
+vizsgál, mert egy pont nélküli név hiánya a sorokból hétköznapi: az `edit_icon` egy header-mező,
+ami mögött nincs érték, egy action-oszlop kulcsa pedig olyan azonosítót nevez meg, amit itt semmi
+nem tud ellenőrizni. Soha nem dob, és debug módon kívül semmit nem csinál.
+
 ### Elrendezés és formázás
 
 `width()`, `resizable()`, `colspan()`, `rowspan()`, `align()`, `class()`, `style()`,

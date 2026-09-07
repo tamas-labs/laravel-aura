@@ -430,6 +430,40 @@ because that is what ends up in a `WHERE`. For a `company_name` column with
 `hidden()` is not a permission. A hidden column is one the user can switch back on; a column
 nobody may see must not be in `columns()` at all.
 
+### Reading through a relation
+
+A dotted field reads one row through another: `Column::make('company.name')` renders the company's
+name, sorts it with a correlated subquery and searches it with a `whereHas`. What it does **not** do
+is load the relation. That is `query()`'s job:
+
+```php
+public function query(): Builder
+{
+    return User::query()->with('company');       // ← without this the column is empty
+}
+```
+
+Forget it and the failure is quiet in the worst way. `toArray()` does not load a lazy relation, so
+there is no N+1 to notice either: the key is simply absent from every row, the column renders blank,
+and the first place you look is the cell configuration — the one place the answer cannot be.
+
+So the package says it for you. With `APP_DEBUG` on, a page whose rows cannot resolve a dotted field
+the definition names writes one `warning` per field to the log:
+
+```
+Aura: App\Tables\UserTable reads "company.name", but the rows carry no "company" — that cell
+renders empty. The usual cause is a missing ->with('company') in query().
+```
+
+It reads the rows that are about to be sent rather than the query's eager loads, and that is what
+keeps it quiet enough to leave on. A relation that is loaded and merely empty for a row carries a
+`null` under its own key, and is never reported. Neither is a dotted path that is no relation at all
+— a JSON cast read as `meta.theme` — or one a `transform()` assembled by hand: the root is in the
+row, so there is nothing to report. Only dotted paths are examined, because a flat name missing from
+the rows is ordinary: `edit_icon` is a header field with no value behind it, and an action column's
+key names an identifier nothing here can verify. It never raises, and it does nothing at all outside
+debug mode.
+
 ### Layout and formatting
 
 `width()`, `resizable()`, `colspan()`, `rowspan()`, `align()`, `class()`, `style()`,

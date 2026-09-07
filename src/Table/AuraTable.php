@@ -14,6 +14,7 @@ use TamasLabs\Aura\Query\AuraQuery;
 use TamasLabs\Aura\Query\FieldPermissions;
 use TamasLabs\Aura\Request\AuraRequest;
 use TamasLabs\Aura\Response\AuraPayload;
+use TamasLabs\Aura\Response\MissingFields;
 use TamasLabs\Aura\Response\NumericFields;
 use TamasLabs\Aura\Response\RowFields;
 use TamasLabs\Aura\Response\RowPermissions;
@@ -247,6 +248,11 @@ abstract class AuraTable
             array_values($paginator->items()),
             $data['items'],
         );
+
+        // Development only, and last: read against the rows the browser is
+        // actually getting, so a relation nothing loaded is a line in the log
+        // rather than a blank column with no explanation.
+        MissingFields::report($blueprint->definition, $data['items'], static::class);
 
         return $blueprint->definition + $data;
     }
