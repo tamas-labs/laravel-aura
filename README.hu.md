@@ -499,6 +499,14 @@ nem tud ellenőrizni. Soha nem dob, és debug módon kívül semmit nem csinál.
 A `cellClass()` a kilógó: az oszlop **adat**celláit stílusozza (`body.columnStyles`), míg a
 `class()` a fejlécet.
 
+Egy header-cellát kétszer olvasnak, és ezt érdemes tudni, mielőtt stílusozod. Ő a `<th>`, és —
+ha az oszlopnak nincs saját cellakonfigurációja — ő *egyben* az a konfiguráció is, amivel az Aura
+az oszlop adatcelláit rendereli. Az `uppercase()` tehát a fejlécet **és** az értékeket is
+nagybetűsíti, a `currency()` viszont csak az értékeket éri el: a fejlécen az Aura kihagyja a
+típusformázást. Ezért ezek a nevek a cellakonfigurációk nevei (`Text`, `Badge`, …), nem egy
+második szótár — és ezért rögzíti egy teszt, hogy ugyanaz a hívás mindkét oldalon ugyanazt a
+szerződéses slotot írja.
+
 ### Minden más
 
 A szerződés több header-cella kulcsot definiál, mint ahány metódus itt van. A `set()` és a

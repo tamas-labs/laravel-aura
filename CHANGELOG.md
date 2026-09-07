@@ -172,6 +172,33 @@ version is independent of the package version.
 
 ### Changed
 
+- **A `Column` formázó- és tipográfia-setterei szándékosan ismétlik a cellakonfigurációk
+  trait-jeit (audit M6).** Tizenöt név szerepel mindkét helyen ugyanazzal az egysoros törzzsel, és
+  ez eddig véletlennek látszott. A `Cell\Concerns\HasFormatting` / `HasTypography` / `HasElement`
+  beemelése a `Column` 948 sorából ~120-at spórolna, és hármat kerülne:
+
+  - **Egy header-cellának két fogyasztója van, egy cellakonfigurációnak egy.** Ő a `<th>` — ahol a
+    `formatValue` `skipTypeFormatting`-gal fut, tehát a `number`/`currency`/`date` a fejlécet nem
+    éri el —, *és* ha az oszlopnak nincs `columnConfigs` bejegyzése, ő maga az a konfiguráció,
+    amivel az Aura az adatcellákat rendereli (`TableBodyRow.tsx`: `mappedColumnConfig ?? column`).
+    A trait-ek a második fogyasztónak íródtak, és az ide tartozó megjegyzések — a `currency()` az,
+    amit egy `decimal` cast kitölt — egy konfiguráción semmit nem jelentenek.
+  - **A `tests/Docs/public-surface.txt` a trait metódusát a trait-en tartja nyilván.** A megosztás
+    tizenöt `Column::` sort törölne a bekommitolt nyilvántartásból: egy eltávolítás alakját, abban
+    az egy fájlban, aminek a dolga a minor és a major megkülönböztetése.
+  - **A `DocsCoverageTest` nevekre illeszt, nem tulajdonosra.** Az a tizenkét metódus, amit a
+    trait-ek idehoznának, cellakonfigurációs metódusként már dokumentált, tehát mindkét README
+    elveszíthetné az oszlop-oldali referenciát úgy, hogy a guard zöld marad. A megosztás kivinné a
+    metódusokat a dokumentációs guard alól.
+
+  Az ismétlést mostantól nem egy komment tartja össze, hanem a `tests/ColumnSlotsTest.php`: minden
+  közös név ugyanazt a szerződéses slotot bocsátja ki és ugyanazokat az argumentumokat fogadja
+  mindkét oldalon, és egyetlen setter sem nevezhet olyan slotot, amit a `header.schema.json` nem
+  deklarál — `additionalProperties: true` mellett az Aura egy kitalált slotot szó nélkül eldobna,
+  tehát a sémavalidáció ezt sosem fogná meg. Mindkét teljes README kimondja, hogy a header-cellát
+  kétszer olvassák: az `uppercase()` a fejlécet **és** az értékeket nagybetűsíti, a `currency()`
+  csak az értékeket. A publikus PHP-felület nem változik.
+
 - **Az error-endpoint kitettsége ki van mondva, nem csak a hiánya (audit K4).** A route-ot semmi
   nem hitelesíti — ez tervezett, mert a jelentést egy natív `fetch()` küldi CSRF-token nélkül —, de
   eddig csak az szerepelt a dokumentációban, mit **ne** tegyünk a `middleware` listába. A csomagolt

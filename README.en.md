@@ -497,6 +497,13 @@ debug mode.
 `cellClass()` is the odd one out: it styles the column's **data** cells (`body.columnStyles`),
 where `class()` styles the heading.
 
+A header cell is read twice, which is worth knowing before styling one. It is the `<th>`, and —
+for a column with no cell configuration of its own — it is *also* the configuration Aura renders
+that column's data cells with. So `uppercase()` upper-cases the heading **and** the values, while
+`currency()` reaches only the values: Aura skips type formatting on a heading. That is why these
+names are the cell configurations' names (`Text`, `Badge`, …) rather than a second vocabulary, and
+why a test pins that the same call writes the same contract slot on both sides.
+
 ### Anything else
 
 The contract defines more header-cell keys than there are methods here. `set()` and `merge()`

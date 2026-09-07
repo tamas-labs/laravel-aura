@@ -28,6 +28,37 @@ use TamasLabs\Aura\Support\JsonMap;
  * What the column allows is read back out of the emitted cell rather than
  * tracked separately: the field whitelist the query side enforces is derived
  * from the same array the browser receives, so the two cannot drift apart.
+ *
+ * **The formatter and typography setters below repeat `Cell\Concerns`'
+ * `HasFormatting`, `HasTypography` and `HasElement` verbatim, and that is a
+ * decision rather than an oversight.** Fifteen names appear in both places with
+ * the same one-line body; `use`-ing the traits would save about 120 lines of
+ * this file's 948 and cost three things:
+ *
+ * - **A header cell has two consumers, and a cell configuration has one.** It
+ *   styles the `<th>` — where `formatValue` runs with `skipTypeFormatting`, so
+ *   `number`/`currency`/`date` never reach the heading — *and*, for a column
+ *   with no `columnConfigs` entry, it is handed to the body renderer as the
+ *   configuration itself (`TableBodyRow.tsx`: `mappedColumnConfig ?? column`).
+ *   The traits are written for the second consumer alone, and the notes that
+ *   belong here — `currency()` is what a `decimal` cast fills in — mean nothing
+ *   on a configuration.
+ * - **`tests/Docs/public-surface.txt` counts a trait's method on the trait.**
+ *   Sharing would delete fifteen `Column::` lines from the committed record:
+ *   the shape of a removal, in the one file whose job is telling a minor
+ *   release from a major one.
+ * - **`DocsCoverageTest` matches names, not owners.** The twelve methods the
+ *   traits would add here are already documented as cell-config methods, so
+ *   both READMEs could lose the column half of the reference with the guard
+ *   still green. Sharing moves methods out from under the documentation guard.
+ *
+ * What keeps the two copies honest is `tests/ColumnSlotsTest.php`: every shared
+ * name has to emit the same contract slot and take the same arguments on both
+ * sides, and no setter here may name a slot `header.schema.json` does not
+ * declare — `additionalProperties: true` means Aura would drop an invented one
+ * without a word. The header-cell keys with no method here (`unit`, `padStart`,
+ * `padEnd`, `chars`, and the typography block from `color` to `text`) are
+ * reachable through {@see self::set()}.
  */
 final class Column
 {
