@@ -11,7 +11,6 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Macroable;
 use TamasLabs\Aura\Cell\CellConfig;
 use TamasLabs\Aura\Cell\CellRules;
-use TamasLabs\Aura\Contracts\AuraOption;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
 use TamasLabs\Aura\Support\JsonMap;
 
@@ -328,7 +327,7 @@ final class Column
 
     /**
      * Filter options built from a backed enum, whether or not the model casts
-     * to it. Labels come from {@see AuraOption}.
+     * to it. Labels come from {@see \TamasLabs\Aura\Contracts\AuraOption}.
      *
      * Always a value → label map, including for an enum backed by `0, 1` —
      * which is the one case {@see self::elements()} cannot express, see

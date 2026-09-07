@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use TamasLabs\Aura\Cell\Button;
 use TamasLabs\Aura\Cell\CellConfig;
-use TamasLabs\Aura\Cell\Concerns\HasRoute;
 use TamasLabs\Aura\Cell\Icon;
 use TamasLabs\Aura\Cell\Link;
 use TamasLabs\Aura\Cell\Modal;
@@ -237,7 +236,7 @@ final class Action
     /**
      * A route of this action's own, as a relative path: `users/{id}/edit`.
      *
-     * Stricter than {@see HasRoute::route()} in
+     * Stricter than {@see \TamasLabs\Aura\Cell\Concerns\HasRoute::route()} in
      * one way — a dot is refused here. Aura turns every dot into a slash, so a
      * Laravel route *name* passed by mistake (`users.edit`) would resolve to
      * `/users/edit`: a real URL, missing the identifier, failing silently.

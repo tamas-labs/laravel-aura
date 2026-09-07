@@ -6,7 +6,6 @@ namespace TamasLabs\Aura\Cell;
 
 use TamasLabs\Aura\Cell\Concerns\HasElement;
 use TamasLabs\Aura\Cell\Concerns\HasTypography;
-use TamasLabs\Aura\Response\NumericFields;
 use TamasLabs\Aura\Support\JsonMap;
 
 /**
@@ -14,7 +13,7 @@ use TamasLabs\Aura\Support\JsonMap;
  *
  * The value has to reach the browser as a real number — a bar reading a Laravel
  * `decimal` cast would otherwise get a string. The table coerces the fields
- * named here for you; see {@see NumericFields}.
+ * named here for you; see {@see \TamasLabs\Aura\Response\NumericFields}.
  *
  * ```php
  * Column::make('completion')->as(

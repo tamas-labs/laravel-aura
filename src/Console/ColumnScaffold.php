@@ -7,7 +7,6 @@ namespace TamasLabs\Aura\Console;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
-use TamasLabs\Aura\Table\Inference;
 use Throwable;
 
 /**
@@ -19,7 +18,7 @@ use Throwable;
  * enum column is only recognisable from the cast, and a `decimal` from the
  * schema.
  *
- * Nothing here is inference in the {@see Inference}
+ * Nothing here is inference in the {@see \TamasLabs\Aura\Table\Inference}
  * sense: this writes source code a person then edits, and every line it emits
  * is one they can delete. It aims to be a defensible first draft, not a final
  * answer — so it never guesses a heading (the column derives one), never picks
@@ -38,6 +37,17 @@ final class ColumnScaffold
 
     /** One indent level in the generated file, matching Pint's `laravel` preset. */
     private const INDENT = '            ';
+
+    /**
+     * One entry per table column, worked out once.
+     *
+     * Both callers need the same pass — `render()` wants the lines, the
+     * command's summary wants how many of them are data columns — and the pass
+     * asks the model for its casts and hidden attributes per column.
+     *
+     * @var list<array{name: string, flags: string|null, lines: list<string>}>|null
+     */
+    private ?array $entries = null;
 
     private function __construct(
         private readonly Model $model,
@@ -68,7 +78,10 @@ final class ColumnScaffold
      */
     public function count(): int
     {
-        return count($this->dataColumns());
+        return count(array_filter(
+            $this->entries(),
+            static fn (array $entry): bool => $entry['flags'] !== null,
+        ));
     }
 
     /**
@@ -114,8 +127,8 @@ final class ColumnScaffold
 
         $lines = [];
 
-        foreach ($this->columns as $column) {
-            foreach ($this->line($column['name'], $column['type']) as $line) {
+        foreach ($this->entries() as $entry) {
+            foreach ($entry['lines'] as $line) {
                 $lines[] = $line;
             }
         }
@@ -124,72 +137,72 @@ final class ColumnScaffold
     }
 
     /**
-     * The data columns actually emitted, for the command's summary line.
+     * Every column decided, memoised.
      *
-     * @return list<string>
+     * @return list<array{name: string, flags: string|null, lines: list<string>}>
      */
-    private function dataColumns(): array
+    private function entries(): array
     {
-        return array_values(array_filter(
-            array_map(
-                fn (array $column): ?string => $this->flagsFor($column['name'], $column['type']) === null
-                    ? null
-                    : $column['name'],
-                $this->columns,
-            ),
-            is_string(...),
-        ));
+        if ($this->entries !== null) {
+            return $this->entries;
+        }
+
+        $entries = [];
+
+        foreach ($this->columns as $column) {
+            $entries[] = $this->scaffold($column['name'], $column['type']);
+        }
+
+        return $this->entries = $entries;
     }
 
     /**
-     * @return list<string>
+     * What one table column becomes: the builder calls it is rendered with, and
+     * the lines it contributes to the generated body.
+     *
+     * The two answers are decided together because they are the same decision
+     * — a column with no flags is one the generator declined, and every reason
+     * for declining has its own line to leave behind.
+     *
+     * @return array{name: string, flags: string|null, lines: list<string>}
      */
-    private function line(string $name, string $type): array
+    private function scaffold(string $name, string $type): array
     {
-        if ($name === $this->model->getKeyName()) {
-            // The selection column already reads it, and the action column
-            // already keys on it.
-            return [];
-        }
-
-        if (in_array($name, $this->model->getHidden(), true)) {
-            return [];
+        if ($name === $this->model->getKeyName() || in_array($name, $this->model->getHidden(), true)) {
+            // The selection column already reads the key, and the action column
+            // already keys on it; a hidden attribute is not in the rows at all.
+            return ['name' => $name, 'flags' => null, 'lines' => []];
         }
 
         if (str_ends_with($name, '_id')) {
-            return [
+            return ['name' => $name, 'flags' => null, 'lines' => [
                 '// '.$name.' is a foreign key. Column::make(\''.substr($name, 0, -3).'.name\') renders the',
                 '// related row instead, and sorts it with a correlated subquery.',
                 '',
-            ];
+            ]];
         }
 
         $flags = $this->flagsFor($name, $type);
 
         if ($flags === null) {
-            return [
+            return ['name' => $name, 'flags' => null, 'lines' => [
                 '// '.$name.' has no default rendering — give it a cell configuration, or leave it out.',
                 '',
-            ];
+            ]];
         }
 
-        return ['Column::make(\''.$name.'\')'.$flags.','];
+        return ['name' => $name, 'flags' => $flags, 'lines' => ['Column::make(\''.$name.'\')'.$flags.',']];
     }
 
     /**
      * The builder calls for one column, or `null` when the type has no sensible
      * default.
+     *
+     * Only reached for a column {@see self::scaffold()} has already decided to
+     * render: the key, a hidden attribute and a foreign key never arrive here.
      */
     private function flagsFor(string $name, string $type): ?string
     {
-        if ($name === $this->model->getKeyName() || in_array($name, $this->model->getHidden(), true)) {
-            return null;
-        }
-
-        if (str_ends_with($name, '_id')) {
-            return null;
-        }
-
         $cast = $this->castOf($name);
 
         if ($cast !== null && in_array($cast, self::OPAQUE_CASTS, true)) {

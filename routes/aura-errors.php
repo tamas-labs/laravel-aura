@@ -21,7 +21,7 @@ use TamasLabs\Aura\Errors\ErrorIngestController;
 |
 */
 
-$config = ErrorIngestConfig::fromConfig();
+$config = app(ErrorIngestConfig::class);
 
 Route::post($config->path, ErrorIngestController::class)
     ->middleware($config->middleware)

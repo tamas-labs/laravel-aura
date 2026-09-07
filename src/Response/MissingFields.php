@@ -5,16 +5,15 @@ declare(strict_types=1);
 namespace TamasLabs\Aura\Response;
 
 use Illuminate\Support\Facades\Log;
-use TamasLabs\Aura\Table\AuraTable;
-use TamasLabs\Aura\Table\Column;
 
 /**
  * Warns, in debug mode, when the definition reads through something the rows
  * do not carry.
  *
- * {@see Column::make()} with `company.name`, over a {@see AuraTable::query()}
- * that forgot `->with('company')`, renders an empty column and says nothing.
- * There is not even an N+1 to notice: `toArray()` does not load a lazy
+ * {@see \TamasLabs\Aura\Table\Column::make()} with `company.name`, over a
+ * {@see \TamasLabs\Aura\Table\AuraTable::query()} that forgot
+ * `->with('company')`, renders an empty column and says nothing. There is not
+ * even an N+1 to notice: `toArray()` does not load a lazy
  * relation, so the key is simply absent from every row. What the developer sees
  * is a blank column, and the first place they look is the cell configuration —
  * the one place the answer cannot be.
@@ -23,7 +22,7 @@ use TamasLabs\Aura\Table\Column;
  * what makes it quiet enough to leave switched on:
  *
  * - a key absent from the row means nothing produced it — a missing eager load,
- *   or a {@see AuraTable::transform()} that dropped it;
+ *   or a {@see \TamasLabs\Aura\Table\AuraTable::transform()} that dropped it;
  * - a key present and `null` is a relation that is loaded and empty *for this
  *   row*, which is ordinary data and never warned about;
  * - a dotted path that is not a relation at all — a JSON cast read as
@@ -32,8 +31,8 @@ use TamasLabs\Aura\Table\Column;
  * Only dotted paths are examined. A flat name absent from the rows is normal
  * and often deliberate: `edit_icon` is a header field with no value behind it,
  * and an action column's key names an identifier the definition cannot verify
- * (see {@see Column::actions()}). And only the first row is read — every row of
- * one page has the same shape.
+ * (see {@see \TamasLabs\Aura\Table\Column::actions()}). And only the first
+ * row is read — every row of one page has the same shape.
  *
  * A warning, never an exception: a definition may legitimately name a field
  * only some pages carry, and nothing here is worth failing a request over.
@@ -89,7 +88,7 @@ final class MissingFields
      * able to take.
      *
      * The row is typed no more narrowly than it arrives: it came out of a
-     * paginator through {@see AuraTable::transform()}, so its keys are only
+     * paginator through {@see \TamasLabs\Aura\Table\AuraTable::transform()}, so its keys are only
      * strings by convention.
      *
      * @param  array<mixed, mixed>  $row

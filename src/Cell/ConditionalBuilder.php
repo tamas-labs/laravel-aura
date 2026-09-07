@@ -6,8 +6,6 @@ namespace TamasLabs\Aura\Cell;
 
 use Illuminate\Support\Traits\Macroable;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
-use TamasLabs\Aura\Response\NumericFields;
-use TamasLabs\Aura\Table\Column;
 
 /**
  * The half of a cell configuration that can vary per row.
@@ -124,7 +122,7 @@ abstract class ConditionalBuilder
 
     /**
      * Set several contract keys this builder has no methods for — the escape
-     * hatch, spelled the same way as {@see Column::merge()}.
+     * hatch, spelled the same way as {@see \TamasLabs\Aura\Table\Column::merge()}.
      *
      * Deliberately unvalidated beyond the structural keys. Every column config
      * in the schema declares `additionalProperties: true` and requires only
@@ -213,7 +211,7 @@ abstract class ConditionalBuilder
      * Collected so the response can hand Aura real numbers for them: Aura's
      * numeric operators require `typeof === 'number'` on both sides, and a
      * Laravel `decimal` cast serialises as a string. See
-     * {@see NumericFields}.
+     * {@see \TamasLabs\Aura\Response\NumericFields}.
      *
      * @return list<string>
      *

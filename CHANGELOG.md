@@ -172,6 +172,53 @@ version is independent of the package version.
 
 ### Changed
 
+- **Az audit alacsony prioritású listája végigvéve (A1–A7).** Hét megállapítás, egy menetben; kettő
+  közülük nem változtatás lett, hanem kimondott döntés.
+
+  - **A1 — egy import függőség, nem rövidítés.** 17 `use` állt a `src/`-ben pusztán azért, hogy egy
+    `{@see}` rövid nevet írhasson; ezek közül három **felfelé mutatott a rétegeken**
+    (`Support\JsonMap` → `Table\TableBlueprint`, `Cell\CellConfig` és `Cell\ConditionalBuilder` →
+    `Table\Column`). Futásidejű körkörösség nem volt, de a réteg-térkép az importokból olvasható ki,
+    és egy ciklusellenőrző nem létező ciklusokat jelentett volna. A hivatkozások mostantól teljes
+    minősítéssel szerepelnek a docblockban, és `tests/ImportsTest.php` őrzi a szabályt — tokenekre
+    bontva, hogy egy sztringben lévő `//` ne tüntethessen el egy valódi használatot. A docblockban
+    lévő kódpélda is próza: a `CellConfig` `Column` importja pontosan egyért állt ott.
+    A `pint.json` a szabály másik fele: a `laravel` preset `fully_qualified_strict_types` szabálya
+    visszaimportálná mindet, ezért ott az `import_symbols` ki van kapcsolva.
+  - **A2 — a `ColumnScaffold` egy menetben dönt.** A `flagsFor()` kétszer futott le minden oszlopra
+    (`lines()` és `dataColumns()`), és a kihagyási szabályokat — kulcs, rejtett attribútum, idegen
+    kulcs — három helyen ismételte. Most egy `scaffold()` dönt oszloponként egyszer, az eredmény
+    memoizált, és teszt rögzíti: a `render()` utáni két `count()` nem olvassa újra a modell castjait.
+  - **A3 — az `aura.errors` szakaszt egyszer olvassuk.** Az `ErrorIngestConfig` docblockja azt
+    állította, hogy „read once and typed", közben négy olvasó hívta a `fromConfig()`-ot külön-külön:
+    az `ErrorStore` factory, a provider `boot()`-ja, a route fájl és a controller. Elvben a route
+    middleware-e és a kérés plafonjai eltérő olvasásból származhattak. Most **singleton** kötés, és
+    mind a négy ugyanazt a példányt kapja. A `fromConfig()` publikus és mellékhatásmentes marad, a
+    provider újraregisztrálása pedig eldobja a feloldott példányt — ez tartja őszintén a teszteket.
+  - **A4 — elutasítva, mérve.** A javaslat a `__invoke(Request $request, ErrorStore $store)` volt
+    method injectionnel. Az a paraméterfeloldás a **routerben** történik, a controller `try`-ján
+    kívül: egy dobó kötés így **500**-at ad, pont azt a választ, amit ez a végpont soha nem adhat —
+    az Aura négyszer újrapróbálja a köteget, majd a sor *elejére* teszi vissza. Mutációval mérve:
+    „Expected response status code [202] but received 500." Új regressziós teszt fedi a feloldhatatlan
+    kötést is, nem csak a dobó `store()`-t. A *konfiguráció* viszont metódus-injektált lett: az
+    singleton, amit a `boot()` már feloldott, tehát paraméterfeloldáskor nincs mi elromoljon.
+  - **A5 — mindkét teljes referencia a dist-ben marad.** A tarball 780 kB, ebből 240 kB a két README,
+    tehát az `export-ignore` valódi megtakarítás lenne — és rossz csere. A `vendor/`-ban lévő példány
+    arra a verzióra válaszol, ami telepítve van; egy GitHub-link a mindenkori `main`-re — ugyanaz az
+    érv, amiért a `composer.lock` kimarad és a séma taggelt tartományra van kötve. Ráadásul a
+    `DocsCoverageTest` **mindkét** fájlban megköveteli a dokumentálást, tehát az egyik elhagyása olyan
+    dokumentációt szállítana, amit egyetlen őr sem ír le. Teszt rögzíti, hogy egyik README sem
+    `export-ignore`-olt.
+  - **A6 — már megvolt.** A `Filter::$values` a K1 óta (`d7b64f0`) `list<scalar|null>`; az audit még a
+    `list<mixed>`-et látta.
+  - **A7 — a mélység a művelet tulajdonsága.** Mindkét referencia és az `AuraQuery::split()`
+    docblockja kimondja, hogy a szétvágás az **utolsó** pontnál történik: a `company.owner.name` a
+    `company.owner` utat és a `name` oszlopot jelenti, amit a keresés/szűrés a `whereHas`-nek ad át
+    tetszőleges mélységben, a rendezés viszont egyetlen reláció fölé épít korrelált alkérdést.
+
+  A `CONTRIBUTING.md` konvenciói között az import-szabály is szerepel, mert egy hozzájárulónak a
+  formázó viselkedésével együtt kell tudnia.
+
 - **A `DatabaseErrorStore` egy teljes köteget két lekérdezésbe ír, 200 helyett (audit M8).**
   `DB::listen`-nel mérve, egy alapértelmezetten maximált, 100 elemű kötegre: **200 lekérdezés**
   hidegen és melegen egyaránt, szinkron módon a kérés alatt — a `throttle:60,1` mögött percenként

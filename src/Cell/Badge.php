@@ -9,18 +9,15 @@ use TamasLabs\Aura\Cell\Concerns\HasElement;
 use TamasLabs\Aura\Cell\Concerns\HasFormatting;
 use TamasLabs\Aura\Cell\Concerns\HasMapping;
 use TamasLabs\Aura\Cell\Concerns\HasTypography;
-use TamasLabs\Aura\Contracts\AuraIcon;
-use TamasLabs\Aura\Contracts\AuraOption;
-use TamasLabs\Aura\Contracts\AuraVariant;
 
 /**
  * A coloured pill — the usual rendering of a status column.
  *
  * The colour normally comes from a lookup rather than a condition, which
  * {@see self::fromEnum()} builds straight out of a backed enum: the labels come
- * from {@see AuraOption::label()} and the variants and icons from the optional
- * {@see AuraVariant} and
- * {@see AuraIcon} the same enum may implement.
+ * from {@see \TamasLabs\Aura\Contracts\AuraOption::label()}, and the variants
+ * and icons from the optional {@see \TamasLabs\Aura\Contracts\AuraVariant}
+ * and {@see \TamasLabs\Aura\Contracts\AuraIcon} the same enum may implement.
  *
  * ```php
  * Column::make('status')->filterable()->as(Badge::fromEnum(Status::class));

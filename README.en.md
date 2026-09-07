@@ -1706,6 +1706,12 @@ so the ORs cannot escape and widen the per-column constraints around them.
 | Global search | `orWhereHas` | any | any |
 | **Sort** | **correlated subquery** | **one level** | **`BelongsTo`, `HasOne`** |
 
+**The split is at the last dot**, so `company.owner.name` names the relation path `company.owner`
+and the column `name`. Depth is therefore a property of the *operation*, not of the field: search,
+filter and global search hand that whole path to `whereHas`, which resolves it however deep it
+goes, while sorting builds a correlated subquery over a single relation and raises
+`UnsupportedRelation` for anything more.
+
 Sorting is the restricted one, deliberately. A join would read more naturally, but it multiplies
 rows on a to-many relation — which corrupts `meta.total` and the contents of every page, breaking
 pagination itself. A correlated subquery has no such effect; the price is that it only answers for
@@ -2036,7 +2042,10 @@ An implementation **must not throw**. The endpoint answers `202` whatever happen
 because Aura re-sends anything else forever; an exception here would turn a storage hiccup into an
 unkillable retry loop. One that does throw anyway is caught and reported rather than passed on —
 the guarantee is enforced where it can be, not only stated here — but a store that reports its own
-failure says something more useful about it than the endpoint can.
+failure says something more useful about it than the endpoint can. A binding that cannot be
+resolved at all is covered by the same catch, which is why the controller resolves the store
+itself instead of taking it as a method-injected parameter: injection happens in the router,
+before the action runs, and a 500 there is the one answer the endpoint may never give.
 
 ### Reading it back
 

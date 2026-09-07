@@ -88,36 +88,6 @@ function auraRequires(string $package): string
 }
 
 /**
- * The PHP this package actually ships.
- *
- * `src/` and the route file, and deliberately nothing else: `tests/` and
- * `workbench/` are `export-ignore`d, so what they import is never a dependency
- * of anybody's installation.
- *
- * @return list<string>
- */
-function auraShippedSources(): array
-{
-    $sources = [auraPackageFile('routes/aura-errors.php')];
-
-    $tree = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator(__DIR__.'/../src', FilesystemIterator::SKIP_DOTS)
-    );
-
-    foreach ($tree as $file) {
-        if ($file instanceof SplFileInfo && $file->getExtension() === 'php') {
-            $contents = file_get_contents($file->getPathname());
-
-            Assert::assertNotFalse($contents, 'Cannot read '.$file->getPathname());
-
-            $sources[] = $contents;
-        }
-    }
-
-    return $sources;
-}
-
-/**
  * Every `illuminate/*` component the shipped code names.
  *
  * Two sources, because neither one sees all of it. An import names its
@@ -145,7 +115,7 @@ function auraComponentsUsed(): array
 
     $components = [];
 
-    foreach (auraShippedSources() as $source) {
+    foreach (auraShippedFiles() as $source) {
         preg_match_all('/^use Illuminate\\\\([A-Za-z]+)\\\\/m', $source, $roots);
 
         foreach ($roots[1] as $root) {
@@ -328,6 +298,29 @@ it('ships the licence its manifest claims', function () {
         $attributes,
         'LICENSE is export-ignored, so the published package would carry no licence text',
     );
+});
+
+it('ships both full references, at the version they document', function () {
+    // The dist tarball is 780 kB and the two references are 240 kB of it, so
+    // `export-ignore`ing one is a real saving and still the wrong trade. A
+    // reference is only trustworthy beside the code it describes:
+    // `vendor/tamas-labs/laravel-aura/README.en.md` answers for the version
+    // that is installed, while a link to GitHub answers for whatever `main`
+    // says today — the same argument that keeps `composer.lock` out and pins
+    // the schema to a tag. And `DocsCoverageTest` requires every public method
+    // to be documented in *both* files, so dropping one from the dist would
+    // ship a documentation set no guard describes.
+    $attributes = file_get_contents(__DIR__.'/../.gitattributes');
+
+    Assert::assertNotFalse($attributes, 'Cannot read .gitattributes');
+
+    foreach (['README.md', 'README.en.md', 'README.hu.md'] as $readme) {
+        Assert::assertDoesNotMatchRegularExpression(
+            '/^\/?'.preg_quote($readme, '/').'\s+export-ignore/m',
+            $attributes,
+            "{$readme} is export-ignored, so an installed copy would have to read it online",
+        );
+    }
 });
 
 it('pins the contract to a tagged range, not to a branch', function () {

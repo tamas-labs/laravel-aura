@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\File;
 use PHPUnit\Framework\Assert;
 use TamasLabs\Aura\Cell\Text;
+use TamasLabs\Aura\Console\ColumnScaffold;
 use TamasLabs\Aura\Table\AuraTable;
 use TamasLabs\Aura\Tests\Fixtures\Post;
 use TamasLabs\Aura\Tests\Fixtures\TypedUser;
@@ -138,4 +140,40 @@ it('refuses a model that is not one', function (): void {
         ->run();
 
     expect(auraGeneratedPath('BogusTable'))->not->toBeFile();
+});
+
+it('decides every column once, however many answers it is asked for', function (): void {
+    // The scaffold answers two questions — the body it renders and how many
+    // data columns that was — and the command asks the second one twice. They
+    // used to be two independent walks over the same columns, each asking the
+    // model for its casts again.
+    $model = new class extends Model
+    {
+        public int $castReads = 0;
+
+        protected $table = 'users';
+
+        /**
+         * @return array<string, string>
+         */
+        public function getCasts(): array
+        {
+            $this->castReads++;
+
+            return parent::getCasts();
+        }
+    };
+
+    $scaffold = ColumnScaffold::read($model);
+
+    $scaffold->render();
+    $reads = $model->castReads;
+
+    expect($reads)->toBeGreaterThan(0);
+
+    $scaffold->count();
+    $scaffold->count();
+
+    // Two more answers, no second pass.
+    expect($model->castReads)->toBe($reads);
 });

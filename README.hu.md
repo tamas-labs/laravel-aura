@@ -1729,6 +1729,12 @@ körülöttük lévő oszlop-szintű megszorításokat.
 | Globális keresés | `orWhereHas` | tetszőleges | bármelyik |
 | **Rendezés** | **korrelált alkérdés** | **egy szint** | **`BelongsTo`, `HasOne`** |
 
+**A szétvágás az utolsó pontnál történik**, tehát a `company.owner.name` a `company.owner`
+relációs utat és a `name` oszlopot nevezi meg. A mélység így a *művelet* tulajdonsága, nem a
+mezőé: a keresés, a szűrés és a globális keresés ezt a teljes utat adja át a `whereHas`-nek, ami
+tetszőleges mélységben feloldja, a rendezés viszont egyetlen reláció fölé épít korrelált
+alkérdést, és bármi ennél mélyebbre `UnsupportedRelation`-t dob.
+
 A rendezés a korlátozott, szándékosan. A join olvashatóbb lenne, de to-many reláción
 megsokszorozza a sorokat — ez pedig elrontja a `meta.total`-t és minden oldal tartalmát, vagyis
 magát a lapozást töri el. A korrelált alkérdésnek nincs ilyen hatása; az ára, hogy csak to-one
@@ -2061,7 +2067,11 @@ Egy implementáció **nem dobhat kivételt**. A végpont `202`-t válaszol, bár
 köteggel, mert az Aura minden mást örökre újraküld; egy kivétel itt egy tárolási zökkenőt
 kiirthatatlan újrapróbálkozási hurokká tenne. Amelyik mégis dob, azt a csomag elkapja és
 lejelenti, nem engedi tovább — a garancia ott van kikényszerítve, ahol lehet, nem csak leírva itt
-—, de a saját hibáját lejelentő store többet tud mondani róla, mint a végpont.
+—, de a saját hibáját lejelentő store többet tud mondani róla, mint a végpont. Ugyanez a `catch`
+fedi le azt az esetet is, amikor a kötést egyáltalán nem sikerül feloldani — ezért oldja fel a
+controller maga a store-t ahelyett, hogy metódus-injektált paraméterként kérné: az injektálás a
+routerben történik, még az action lefutása előtt, és az ott keletkező 500 pont az a válasz, amit a
+végpont soha nem adhat.
 
 ### Visszaolvasás
 

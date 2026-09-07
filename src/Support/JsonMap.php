@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace TamasLabs\Aura\Support;
 
 use stdClass;
-use TamasLabs\Aura\Table\TableBlueprint;
 
 /**
  * A value → configuration lookup, in the one PHP shape that survives
@@ -20,7 +19,7 @@ use TamasLabs\Aura\Table\TableBlueprint;
  * already, which is why the failure looks arbitrary from the outside.
  *
  * A `stdClass` is the cast, deliberately and not a class of this package's own:
- * the finished definition is cached (see {@see TableBlueprint}),
+ * the finished definition is cached (see {@see \TamasLabs\Aura\Table\TableBlueprint}),
  * and an entry holding a class that a later deploy renames or drops comes back
  * from the cache as an incomplete object. `stdClass` cannot go stale.
  *

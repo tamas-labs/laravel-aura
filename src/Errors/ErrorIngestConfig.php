@@ -7,6 +7,16 @@ namespace TamasLabs\Aura\Errors;
 /**
  * The `aura.errors` section, read once and typed.
  *
+ * Once is literal: `AuraServiceProvider` binds this as a **singleton**, and
+ * the four readers on the way to one answer — that binding's `ErrorStore`
+ * factory, the provider's `boot()`, the route file and the controller — all
+ * resolve the same instance. They used to call {@see self::fromConfig()}
+ * separately, so the middleware the route was registered with and the ceilings
+ * the request was measured against came from different reads of the same
+ * section. {@see self::fromConfig()} stays public and side-effect free: a test
+ * that wants the section as the config file currently spells it calls it
+ * directly, and re-registering the provider is what replaces the bound one.
+ *
  * Everything here is a ceiling or a switch, and every one of them exists
  * because the client applies none of its own. Aura's reporter batches up to a
  * hundred entries, each of which may carry the whole rejected response section

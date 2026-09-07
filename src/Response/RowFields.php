@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace TamasLabs\Aura\Response;
 
-use TamasLabs\Aura\Table\AuraTable;
-
 /**
  * The fields a definition actually reads, and a row narrowed to them.
  *
@@ -13,7 +11,7 @@ use TamasLabs\Aura\Table\AuraTable;
  * than the table asked: a five-column table over a twenty-five-column model
  * sends twenty extra values per row, and an eager-loaded relation sends its
  * whole row too. The default stays that way — the payload's shape is public
- * surface — and {@see AuraTable::$onlyDeclaredFields}
+ * surface — and {@see \TamasLabs\Aura\Table\AuraTable::$onlyDeclaredFields}
  * turns this on.
  *
  * **Read out of the emitted definition, never declared twice.** The same
@@ -28,7 +26,7 @@ use TamasLabs\Aura\Table\AuraTable;
  * key that is not a field costs an unused entry, and a field left out would
  * blank a cell. It cannot see a field named only inside a hand-written
  * `merge()` payload, which is why the switch is opt-in and
- * {@see AuraTable::transform()} is the full answer.
+ * {@see \TamasLabs\Aura\Table\AuraTable::transform()} is the full answer.
  *
  * @internal
  */

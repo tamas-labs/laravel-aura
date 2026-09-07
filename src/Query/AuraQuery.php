@@ -373,6 +373,11 @@ final class AuraQuery
     /**
      * Split a field into its relation path and its column.
      *
+     * At the **last** dot: `company.owner.name` is the path `company.owner` and
+     * the column `name`. What the caller may do with a path of more than one
+     * segment differs per operation — `whereHas` takes it whole, at any depth,
+     * while {@see self::applySorts()} refuses anything past one relation.
+     *
      * @return array{0: string|null, 1: string}
      */
     private static function split(string $field): array

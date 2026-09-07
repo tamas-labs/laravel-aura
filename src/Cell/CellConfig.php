@@ -9,12 +9,11 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use TamasLabs\Aura\Exceptions\InvalidDefinition;
 use TamasLabs\Aura\Response\RowPermissions;
-use TamasLabs\Aura\Table\Column;
 
 /**
  * How one column's data cells are rendered — an entry of `body.columnConfigs`.
  *
- * A configuration is a separate object from the {@see Column}
+ * A configuration is a separate object from the {@see \TamasLabs\Aura\Table\Column}
  * on purpose. The column describes the *heading* and what the server will let
  * the client do with the field; the configuration describes the *cell*. They
  * carry overlapping key names (`align`, `currency`, `class`) with different

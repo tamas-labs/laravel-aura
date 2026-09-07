@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace TamasLabs\Aura\Cell\Concerns;
 
-use TamasLabs\Aura\Cell\CellRules;
-
 /**
  * Type and colour settings on the rendered content.
  *
  * Present on seven of the nine column configs, always with the same meaning.
  * These style the content, not the `<td>` around it — for the cell itself see
- * {@see CellRules}.
+ * {@see \TamasLabs\Aura\Cell\CellRules}.
  */
 trait HasTypography
 {

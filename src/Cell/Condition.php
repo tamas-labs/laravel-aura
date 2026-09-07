@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace TamasLabs\Aura\Cell;
 
-use TamasLabs\Aura\Response\NumericFields;
-
 /**
  * One condition of an `if` branch.
  *
@@ -25,7 +23,7 @@ final readonly class Condition
     /**
      * Operators Aura compares numerically. Both sides have to be numbers — or
      * both have to parse as dates — or the comparison is simply false, with no
-     * warning anywhere. See {@see NumericFields}.
+     * warning anywhere. See {@see \TamasLabs\Aura\Response\NumericFields}.
      */
     private const NUMERIC = ['gt', 'gte', 'lt', 'lte', 'between'];
 

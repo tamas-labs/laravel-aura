@@ -27,8 +27,19 @@ final class AuraServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom($this->configPath(), 'aura');
 
+        // A singleton because the section is read in four places on the way to
+        // one answer — this binding, `boot()`, the route file and the
+        // controller — and nothing may make them disagree. Rebinding it here is
+        // also what keeps a test honest: `register()` running again drops the
+        // resolved instance, so a provider re-registered against new config
+        // hands out the new config.
+        $this->app->singleton(
+            ErrorIngestConfig::class,
+            static fn (): ErrorIngestConfig => ErrorIngestConfig::fromConfig(),
+        );
+
         $this->app->bind(ErrorStore::class, function (): ErrorStore {
-            $config = ErrorIngestConfig::fromConfig();
+            $config = $this->app->make(ErrorIngestConfig::class);
 
             return $config->usesDatabase()
                 ? new DatabaseErrorStore($config)
@@ -50,7 +61,7 @@ final class AuraServiceProvider extends ServiceProvider
         // them at all.
         $this->loadTranslationsFrom($this->langPath(), Messages::NAMESPACE);
 
-        if (ErrorIngestConfig::fromConfig()->enabled) {
+        if ($this->app->make(ErrorIngestConfig::class)->enabled) {
             $this->loadRoutesFrom(__DIR__.'/../routes/aura-errors.php');
         }
 

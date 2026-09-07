@@ -70,6 +70,12 @@ are worth knowing before you write the code rather than after:
 - **Code comments in English**, in every version-controlled file. The maintainer's working language
   is Hungarian for discussion, commit messages, `README.hu.md` and `CHANGELOG.md`; a pull request
   in English is equally welcome.
+- **An import is a dependency, not a spelling aid.** A `use` in `src/` has to be named by code or
+  by a type annotation; a class mentioned only in a docblock is written out in full
+  (`{@see \TamasLabs\Aura\Table\Column::make()}`). The layer map is read off the imports, and
+  short-name links used to make three of them point up the layers. `tests/ImportsTest.php`
+  enforces it, and `pint.json` turns off `fully_qualified_strict_types`' symbol import so the
+  formatter does not put them back.
 - Keep a pull request to one feature or fix.
 
 ## Release process

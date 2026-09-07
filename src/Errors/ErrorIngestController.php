@@ -35,9 +35,8 @@ final class ErrorIngestController
     /**
      * Accept one batch of reported errors.
      */
-    public function __invoke(Request $request): JsonResponse
+    public function __invoke(Request $request, ErrorIngestConfig $config): JsonResponse
     {
-        $config = ErrorIngestConfig::fromConfig();
         $size = strlen($request->getContent());
 
         if ($size > $config->maxPayload) {
@@ -80,6 +79,13 @@ final class ErrorIngestController
      * enforced, rather than in the documentation of the interface. Resolving
      * the store is inside the `try` for the same reason: a misconfigured
      * binding fails the same way a write does.
+     *
+     * **This is why the store is not method-injected**, unlike the config
+     * beside it. Method injection resolves before the action runs — outside
+     * this `try`, in the router — so a host whose binding throws would get the
+     * 500 the whole feature is built to avoid. The config can be injected
+     * because it is a singleton the provider's `boot()` has already resolved,
+     * so nothing is left to fail at parameter-resolution time.
      *
      * The exception is reported through the application's handler, so it lands
      * wherever the host already looks for errors. `0` stored is the honest

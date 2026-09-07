@@ -567,6 +567,54 @@ it('answers 202 when a bound store throws', function (): void {
     Exceptions::assertReported(RuntimeException::class);
 });
 
+it('answers 202 when the store cannot be resolved at all', function (): void {
+    // The other half of the same guarantee, and the reason the store is not a
+    // method-injected parameter: injection resolves in the router, *outside*
+    // this controller's try, so a host whose binding throws would get the 500
+    // the endpoint exists to avoid — and Aura would retry the batch forever.
+    // The config beside it can be injected, because the provider's boot() has
+    // already resolved that singleton.
+    Exceptions::fake();
+
+    auraEnableIngest();
+
+    app()->bind(ErrorStore::class, function (): ErrorStore {
+        throw new RuntimeException('the binding is broken');
+    });
+
+    auraPostErrors([auraErrorEntry()])
+        ->assertStatus(202)
+        ->assertJson(['received' => 1, 'stored' => 0, 'dropped' => 0]);
+
+    Exceptions::assertReported(RuntimeException::class);
+});
+
+it('reads the aura.errors section once and hands the same one to every reader', function (): void {
+    // The section used to be read separately by the ErrorStore binding, the
+    // provider's boot(), the route file and the controller, so the middleware
+    // the route was registered behind and the ceilings a request was measured
+    // against came from four different reads.
+    auraEnableIngest(['max_payload' => 4096]);
+
+    $config = app(ErrorIngestConfig::class);
+
+    expect(app(ErrorIngestConfig::class))->toBe($config)
+        ->and($config->maxPayload)->toBe(4096);
+
+    config()->set('aura.errors.max_payload', 1);
+
+    // Still the instance the route was registered against: within one request
+    // the readers agree, which is the whole point of binding it.
+    expect(app(ErrorIngestConfig::class))->toBe($config);
+
+    app()->register(new AuraServiceProvider(app()), true);
+
+    // Re-registering the provider drops it — which is what lets a test set the
+    // config and be believed.
+    expect(app(ErrorIngestConfig::class))->not->toBe($config)
+        ->and(app(ErrorIngestConfig::class)->maxPayload)->toBe(1);
+});
+
 it('answers 202 when the queue it dispatches to is unreachable', function (): void {
     // The other branch of dispatch(): with `queue` on, nothing of the store runs
     // in the request, but handing the job over can fail on its own.

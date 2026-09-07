@@ -242,3 +242,39 @@ function auraPackageFile(string $file): string
 
     return $contents;
 }
+
+/**
+ * Every PHP file this package actually ships, keyed by its path from the
+ * package root.
+ *
+ * `src/` and the route file, and deliberately nothing else: `tests/` and
+ * `workbench/` are `export-ignore`d, so what they import is never a dependency
+ * of anybody's installation. Lives here rather than beside its first caller
+ * because two guards read it — the requirement list and the import list.
+ *
+ * @return array<string, string>
+ */
+function auraShippedFiles(): array
+{
+    $root = dirname(__DIR__);
+    $files = ['routes/aura-errors.php' => auraPackageFile('routes/aura-errors.php')];
+
+    $tree = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root.'/src', FilesystemIterator::SKIP_DOTS)
+    );
+
+    foreach ($tree as $file) {
+        if ($file instanceof SplFileInfo && $file->getExtension() === 'php') {
+            $path = str_replace($root.DIRECTORY_SEPARATOR, '', $file->getPathname());
+            $contents = file_get_contents($file->getPathname());
+
+            Assert::assertNotFalse($contents, "Cannot read {$path}");
+
+            $files[str_replace(DIRECTORY_SEPARATOR, '/', $path)] = $contents;
+        }
+    }
+
+    ksort($files);
+
+    return $files;
+}

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace TamasLabs\Aura\Cell\Concerns;
 
-use TamasLabs\Aura\Cell\Condition;
 use TamasLabs\Aura\Support\JsonMap;
 
 /**
@@ -13,7 +12,7 @@ use TamasLabs\Aura\Support\JsonMap;
  * Aura resolves the mapping **after** the `if` / `else` branches are flattened,
  * and merges the matched entry over the result — so a mapping entry beats a
  * branch, not the other way round. Reach for it when one field selects between
- * a handful of fixed presentations; reach for {@see Condition}
+ * a handful of fixed presentations; reach for {@see \TamasLabs\Aura\Cell\Condition}
  * when the rule is a comparison rather than a lookup.
  *
  * Which field is looked up depends on the type: `field` if the config has one,
