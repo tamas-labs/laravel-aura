@@ -11,7 +11,7 @@ namespace TamasLabs\Aura\Request;
 final readonly class Filter
 {
     /**
-     * @param  list<mixed>  $values
+     * @param  list<scalar|null>  $values
      */
     public function __construct(
         public string $field,

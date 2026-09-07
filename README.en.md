@@ -1398,7 +1398,7 @@ on anything the contract does not allow.
 | `paginate` | integer ≥ 1 | **yes** | clamped to `pagination.max` |
 | `sortable[]` | `{field, direction}` | no | `direction` is `asc` or `desc`; one entry per field |
 | `searchable[]` | `{field, term?, exact?, min?, max?}` | no | term search or range search; one entry per field |
-| `filterable[]` | `{field, values[]}` | no | `values` may be empty, but must be present; one entry per field |
+| `filterable[]` | `{field, values[]}` | no | `values` may be empty, but must be present; every element is a string, a number, a boolean or `null`; one entry per field |
 | `globalSearch` | string | no | at most `limits.term` characters |
 | `selected[]` | string / number | no | row ids for bulk actions; at most `limits.selected` |
 
@@ -1479,7 +1479,10 @@ MySQL and SQLite disagree on whether a backslash inside a string literal is itse
 **Filtering.** `{field, values}` matches a row whose column equals any of the values. A `null`
 among them adds `OR column IS NULL` — `IN (…)` never matches `NULL`, so a selected "no value"
 would otherwise silently drop exactly the rows the user asked for. An empty `values` array matches
-nothing, which is what an empty selection means.
+nothing, which is what an empty selection means. A value that is not a scalar is a **422**: the
+values are bound into `whereIn()`, where a nested array is an exception rather than a query, and
+the contract's schema types the items as `{}` — so the request layer is the only place the
+constraint can live.
 
 **Global search.** One term, `OR`-ed across the declared fields, wrapped in its own nested `where`
 so the ORs cannot escape and widen the per-column constraints around them.

@@ -259,6 +259,34 @@ it('refuses a filter carrying more values than the ceiling', function (): void {
     ], new FieldPermissions(filterable: ['status']));
 })->throws(ValidationException::class);
 
+it('refuses a non-scalar filter value', function (mixed $value): void {
+    // The values go into `whereIn()`, where a nested array is an
+    // InvalidArgumentException — a 500 over input the schema calls valid
+    // (`items: {}`). Malformed input is a 422 here like everywhere else.
+    AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'filterable' => [['field' => 'status', 'values' => [$value]]],
+    ], new FieldPermissions(filterable: ['status']));
+})->with([
+    'nested list' => [[1, 2]],
+    'single-element list' => [[1]],
+    // The quiet one: Laravel flattens this into the bindings, so the query that
+    // runs is not the one the client asked for, with nothing raised.
+    'nested map' => [['nested' => 1]],
+    'empty array' => [[]],
+])->throws(ValidationException::class);
+
+it('keeps every scalar a filter may legitimately carry', function (): void {
+    $request = AuraRequest::fromArray([
+        'page' => 1,
+        'paginate' => 10,
+        'filterable' => [['field' => 'status', 'values' => ['active', 3, 1.5, true, null]]],
+    ], new FieldPermissions(filterable: ['status']));
+
+    expect($request->filterable[0]->values)->toBe(['active', 3, 1.5, true, null]);
+});
+
 it('takes an explicit limit over the configured one', function (): void {
     config()->set('aura.limits.term', 255);
 

@@ -1412,7 +1412,7 @@ JSON-törzsből, `GET` / `DELETE` esetén a query-paraméterekből. Mindkettő `
 | `paginate` | egész ≥ 1 | **igen** | a `pagination.max`-ra vágódik |
 | `sortable[]` | `{field, direction}` | nem | a `direction` `asc` vagy `desc`; mezőnként egy bejegyzés |
 | `searchable[]` | `{field, term?, exact?, min?, max?}` | nem | szöveges vagy tartománykeresés; mezőnként egy bejegyzés |
-| `filterable[]` | `{field, values[]}` | nem | a `values` lehet üres, de jelen kell lennie; mezőnként egy bejegyzés |
+| `filterable[]` | `{field, values[]}` | nem | a `values` lehet üres, de jelen kell lennie; minden eleme string, szám, logikai érték vagy `null`; mezőnként egy bejegyzés |
 | `globalSearch` | string | nem | legfeljebb `limits.term` karakter |
 | `selected[]` | string / szám | nem | sor-azonosítók a köteges műveletekhez; legfeljebb `limits.selected` |
 
@@ -1497,7 +1497,9 @@ egyetlen raw SQL-je, és viszi magával az indoklást.
 bármelyikével egyenlő. A `null` köztük `OR column IS NULL`-t ad hozzá — az `IN (…)` soha nem
 illeszkedik `NULL`-ra, így egy kiválasztott „nincs érték" különben csendben pont azokat a sorokat
 dobná el, amiket a felhasználó kért. Az üres `values` tömb semmire nem illeszkedik, mert az üres
-kijelölés ezt jelenti.
+kijelölés ezt jelenti. A nem skalár érték **422**: az értékek a `whereIn()` kötéseibe kerülnek,
+ahol egy beágyazott tömb kivétel, nem lekérdezés — a szerződés sémája viszont `{}`-ként tipizálja
+az elemeket, tehát a korlát csak a kérés rétegében lehet.
 
 **Globális keresés.** Egy keresőkifejezés, `OR`-ral összefűzve a deklarált mezőkön, saját
 beágyazott `where`-be csomagolva, hogy az OR-ok ne tudjanak kiszabadulni és kitágítani a

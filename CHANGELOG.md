@@ -91,6 +91,19 @@ version is independent of the package version.
 
 ### Fixed
 
+- **A non-scalar `filterable[].values` element was a 500, not a 422.** The request validator bounded
+  the array's length but said nothing about its elements, and the contract's schema types them as
+  `{}` — so `values: [[1, 2]]` travelled unchanged into `whereIn()` and came back out as
+  `InvalidArgumentException: Nested arrays may not be passed to whereIn method.`, a stack trace in
+  the log for every such request. A single-element nested array was quieter and worse: Laravel
+  flattens it into the bindings, so `values: [["nested" => 1], "ok"]` bound `[1, "ok"]` and **ran a
+  different query than the client asked for**, with nothing raised.
+
+  `filterable.*.values.*` now has to be a string, a number, a boolean or `null` — the last one
+  because `AuraQuery` reads it as the "no value" selection. Everything else is a `ValidationException`
+  like the rest of the request layer, which is what the package documents. `Filter::$values` is
+  typed `list<scalar|null>` accordingly.
+
 - **The global search whitelisted the rendered field instead of the reference.**
   `ColumnPermissions` resolved the other three operations as Aura does (`reference || field || key`)
   but read the raw `field` for the global search, so a column such as

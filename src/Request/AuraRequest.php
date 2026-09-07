@@ -217,6 +217,17 @@ final readonly class AuraRequest
             }
         };
 
+        // A filter's values go straight into `whereIn()`, where a nested array is
+        // an InvalidArgumentException — a 500 over client input. The schema types
+        // the items as `{}`, so this rule set is the only place the constraint can
+        // live. `null` is allowed: filterIn() reads it as "no value" and asks for
+        // it with an `orWhereNull`.
+        $scalarValue = static function (string $attribute, mixed $value, Closure $fail): void {
+            if ($value !== null && ! is_scalar($value)) {
+                $fail('The :attribute must be a string, a number or a boolean.');
+            }
+        };
+
         /** @var array<string, mixed> $validated */
         $validated = Validator::make($payload, [
             // No `max` rule on paginate: an oversized page is clamped, not rejected,
@@ -246,6 +257,7 @@ final readonly class AuraRequest
             // because `elements` is optional — Aura derives the options from the
             // loaded rows when a column declares none.
             'filterable.*.values' => ['present', 'array', 'max:'.$limits->values],
+            'filterable.*.values.*' => [$scalarValue],
             'globalSearch' => ['sometimes', 'string', 'max:'.$limits->term],
             // No `max` here: assertListsAreBounded() already refused an
             // oversized selection, and it did so before this rule set would
@@ -382,12 +394,34 @@ final readonly class AuraRequest
             self::guardUnique($seen, $field, 'filterable');
             $seen[$field] = true;
 
-            $values = $row['values'] ?? [];
-
-            $filters[] = new Filter($field, is_array($values) ? array_values($values) : []);
+            $filters[] = new Filter($field, self::values($row['values'] ?? []));
         }
 
         return $filters;
+    }
+
+    /**
+     * The values of one `filterable[]` entry, narrowed to what `whereIn()` can
+     * bind. The validator has already refused everything else; this walk is
+     * what carries that guarantee into the type.
+     *
+     * @return list<scalar|null>
+     */
+    private static function values(mixed $values): array
+    {
+        if (! is_array($values)) {
+            return [];
+        }
+
+        $scalars = [];
+
+        foreach ($values as $value) {
+            if ($value === null || is_scalar($value)) {
+                $scalars[] = $value;
+            }
+        }
+
+        return $scalars;
     }
 
     /**
