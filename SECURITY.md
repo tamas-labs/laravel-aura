@@ -39,4 +39,8 @@ Two things are deliberately **not** security boundaries, and are documented as s
 - **`allowedWhen()` hides a cell; it does not authorise anything.** The row, its identifier and the
   route all stay in the payload. Protect the route with the policy it deserves.
 - **The generated payload is public data.** Whatever a column emits is sent to the browser, cached
-  by the host application, and visible to anyone who can open the table.
+  by the host application, and visible to anyone who can open the table. A row is **wider than the
+  columns**: by default it is the whole model as `toArray()` renders it, so an attribute no column
+  reads still goes out unless the model hides it. `AuraTable::transform()` and
+  `$onlyDeclaredFields` narrow it; a report that one of them leaks a field it says it drops is a
+  bug worth sending, an unlisted attribute in a default payload is documented behaviour.

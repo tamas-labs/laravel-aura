@@ -15,6 +15,7 @@ use TamasLabs\Aura\Query\FieldPermissions;
 use TamasLabs\Aura\Request\AuraRequest;
 use TamasLabs\Aura\Response\AuraPayload;
 use TamasLabs\Aura\Response\NumericFields;
+use TamasLabs\Aura\Response\RowFields;
 use TamasLabs\Aura\Response\RowPermissions;
 
 /**
@@ -84,6 +85,32 @@ abstract class AuraTable
     protected ?string $resource = null;
 
     /**
+     * Send only the fields the definition names.
+     *
+     * A row is the model as `toArray()` renders it — everything the model is
+     * not hiding, whether or not a column reads it. That is more than the table
+     * asked for in two ways: a five-column table over a twenty-five-column
+     * model sends twenty unread values per row, and `->with('company')` sends
+     * every column of the company beside them. The model's `$hidden` is the
+     * only thing standing between an unlisted `notes` or `internal_score` and
+     * the browser, and the table definition never mentions it.
+     *
+     * Switching this on narrows each row to what the emitted definition names —
+     * fields, references, keys, condition fields and route placeholders, read
+     * back out of the definition the browser receives rather than declared a
+     * second time. It applies to whatever {@see self::transform()} returned, so
+     * the two compose.
+     *
+     * **Off by default, and that is a compatibility decision rather than a
+     * preference.** The payload's shape is public surface, so narrowing it for
+     * everyone is a major version. A hand-written `merge()` payload can also
+     * name a field nothing else in the definition mentions, and that field
+     * would be dropped; {@see self::transform()} is the answer that cannot
+     * guess wrong.
+     */
+    protected bool $onlyDeclaredFields = false;
+
+    /**
      * {@see self::columns()}, called once.
      *
      * The list is asked for twice per request — once to build the definition,
@@ -139,6 +166,34 @@ abstract class AuraTable
     }
 
     /**
+     * One row, as the browser receives it.
+     *
+     * The whole model by default. Override to send less — an API resource, an
+     * `->only()`, a `makeHidden()` — or to add something computed:
+     *
+     * ```php
+     * protected function transform(Model $model): array
+     * {
+     *     return $model->only(['id', 'first_name', 'last_name', 'status']);
+     * }
+     * ```
+     *
+     * Two things are added *after* this and cannot be removed here: the numeric
+     * coercion the conditions need, and the per-row permission flags. Both read
+     * the definition, so neither can be satisfied by a row this returns.
+     *
+     * @param  TModel  $model
+     * @return array<string, mixed>
+     */
+    protected function transform(Model $model): array
+    {
+        /** @var array<string, mixed> $row */
+        $row = $model->toArray();
+
+        return $row;
+    }
+
+    /**
      * Serve one request: the definition, plus the page of data it asked for.
      *
      * @return array<string, mixed>
@@ -151,7 +206,15 @@ abstract class AuraTable
 
         $paginator = AuraQuery::paginate($this->query(), $aura);
 
-        $data = AuraPayload::fromPaginator($paginator)->toArray();
+        $data = AuraPayload::fromPaginator($paginator, $this->transform(...))->toArray();
+
+        if ($this->onlyDeclaredFields) {
+            // Read out of the definition the browser is about to receive — the
+            // cached one when caching is on — so the rows cannot be narrowed to
+            // a different set of fields than the table was described with.
+            $data['items'] = RowFields::fromDefinition($blueprint->definition)->narrowAll($data['items']);
+        }
+
         $data['items'] = NumericFields::coerce($data['items'], $blueprint->numericFields);
 
         // Last, and from the models rather than the rows: a policy wants the

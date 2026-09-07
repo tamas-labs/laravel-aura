@@ -21,6 +21,7 @@ fields the query will accept come out of the same definition, so they cannot dri
   - [`limits` — the rest of the payload](#limits--the-rest-of-the-payload)
 - [Defining a table](#defining-a-table)
   - [Generating one](#generating-one)
+- [What goes out in the rows](#what-goes-out-in-the-rows)
 - [Columns](#columns)
 - [Inference](#inference)
 - [Enums](#enums)
@@ -306,6 +307,77 @@ can be built once. A fluent chain in a controller rebuilds all of it on every fe
 (new UserTable)->definition();        // header + body + footer — the request-independent half
 (new UserTable)->permissions();       // the FieldPermissions the columns imply
 ```
+
+---
+
+## What goes out in the rows
+
+`items` is the page, one row per model, and by default a row is the **whole model**: everything
+`toArray()` renders, whether or not a column reads it.
+
+```php
+// A table with one Column::make('last_name'), over a model with eight columns
+{"id":1,"company_id":3,"first_name":"Ada","last_name":"Lovelace",
+ "email":"ada@example.test","status":"active","balance":500,"created_at":"2024-01-01T10:00:00Z"}
+```
+
+That is two things at once. It is **data the table never asked for** — the model's `$hidden` is
+the only thing standing between an unlisted `notes`, `internal_score` or `deleted_reason` and the
+browser, and the table definition does not mention it. And it is **payload size**: a twenty-five
+column model behind a five-column table sends five times the JSON, and `->with('company')` adds
+every column of the company to every row.
+
+The default stays that way on purpose — the shape of a row is part of what this package promises,
+so narrowing it for everybody would be a major version. Two ways to say something narrower:
+
+### `transform()`
+
+```php
+protected function transform(Model $model): array
+{
+    return $model->only(['id', 'first_name', 'last_name', 'status']);
+}
+```
+
+The hook decides what one model becomes. An API resource, an `->only()`, a `makeHidden()`, an
+extra computed value — anything that answers with an array. It is the answer that cannot guess
+wrong, because you wrote it.
+
+### `$onlyDeclaredFields`
+
+```php
+final class UserTable extends AuraTable
+{
+    protected bool $onlyDeclaredFields = true;
+}
+```
+
+Narrows every row to the fields **the emitted definition names**, read back out of the definition
+the browser receives rather than declared a second time — the same argument as the field
+whitelist. What counts as named:
+
+| In the definition | Kept |
+| --- | --- |
+| a header cell's `field`, `fields[]`, `reference`, `key` | the field, the members of a multi-field column, the action column's identifier |
+| a `columnConfigs` key | the field the renderer is attached to |
+| a condition's `key` | the field a condition compares, even with no column of its own |
+| a `{placeholder}` in a route | the field the route is filled from per row |
+
+A dotted name narrows into the relation: `company.name` keeps `company` with `name` in it and
+nothing else, in a nested row and in every row of a nested list. Naming both `company` and
+`company.name` keeps the whole company — whatever asked for all of it wins.
+
+The two compose: the narrowing applies to whatever `transform()` returned. And two things are
+added *after* it, so neither can be narrowed away — the numeric coercion the conditions need, and
+the per-row permission flags, which have to be there even when they are `false`.
+
+**What it cannot see is a field named only inside a hand-written `merge()` payload.** That is the
+escape hatch's price, and it is why the switch is opt-in rather than the default: a field left out
+blanks a cell. If you use `merge()` to name a field, use `transform()` instead of the switch.
+
+None of this is authorisation. A row narrowed to four fields is still four fields anyone who can
+open the table may read; see [Per-row permissions](#per-row-permissions) for where the line
+actually is.
 
 ---
 
@@ -1519,12 +1591,17 @@ side-effecting method on your own model, named by one of your own columns.
 ### AuraPayload
 
 ```php
-AuraPayload::fromPaginator(Paginator|CursorPaginator $paginator): self
+AuraPayload::fromPaginator(Paginator|CursorPaginator $paginator, ?callable $transform = null): self
 $payload->toArray(): array   // ['items' => …, 'meta' => …, 'links' => …]
 ```
 
-`items` are the rows flattened to plain data, re-indexed with `array_values` — a paginator page
-with gaps in its keys would serialise to a JSON object instead of an array.
+`items` are the rows flattened to plain data, re-indexed — a paginator page with gaps in its keys
+would serialise to a JSON object instead of an array.
+
+`$transform` decides what one model becomes, and is what `AuraTable::transform()` is handed down
+as. Without it a model is everything it is not hiding, which is what a caller passing its own
+paginator expects. Only a model is offered to it: a page of plain arrays is somebody else's shape
+already.
 
 **Only `LengthAwarePaginator` works.** The contract requires `meta.last_page` and `meta.total`,
 and neither `simplePaginate()` nor `cursorPaginate()` knows them, because neither runs the count

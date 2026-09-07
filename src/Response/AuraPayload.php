@@ -8,6 +8,7 @@ use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Database\Eloquent\Model;
 use TamasLabs\Aura\Exceptions\UnsupportedPaginator;
 
 /**
@@ -36,17 +37,18 @@ final readonly class AuraPayload
      * @template TValue
      *
      * @param  Paginator<int, TValue>|CursorPaginator<int, TValue>  $paginator
+     * @param  (callable(TValue): array<string, mixed>)|null  $transform  How one model becomes one row.
      *
      * @throws UnsupportedPaginator When the paginator cannot report `last_page` / `total`.
      */
-    public static function fromPaginator(Paginator|CursorPaginator $paginator): self
+    public static function fromPaginator(Paginator|CursorPaginator $paginator, ?callable $transform = null): self
     {
         if (! $paginator instanceof LengthAwarePaginator) {
             throw UnsupportedPaginator::for($paginator);
         }
 
         return new self(
-            items: self::items($paginator),
+            items: self::items($paginator, $transform),
             meta: [
                 'current_page' => $paginator->currentPage(),
                 'from' => $paginator->firstItem(),
@@ -82,19 +84,36 @@ final readonly class AuraPayload
     /**
      * The rows, flattened to plain data.
      *
-     * `array_values` on purpose: the contract types `items` as an array, and a
-     * paginator page with gaps in its keys would serialise to a JSON object.
+     * Collected by appending rather than by mapping: the contract types `items`
+     * as an array, and a paginator page with gaps in its keys would serialise
+     * to a JSON object.
+     *
+     * Without a transform a model becomes everything it is not hiding, which is
+     * what this has always sent and what a caller passing a paginator of its
+     * own expects. With one, the caller decides the shape of a row — and it is
+     * only offered a model, because a page of plain arrays or of a value object
+     * has nothing to transform.
      *
      * @template TValue
      *
      * @param  LengthAwarePaginator<int, TValue>  $paginator
+     * @param  (callable(TValue): array<string, mixed>)|null  $transform
      * @return list<mixed>
      */
-    private static function items(LengthAwarePaginator $paginator): array
+    private static function items(LengthAwarePaginator $paginator, ?callable $transform): array
     {
-        return array_values(array_map(
-            static fn (mixed $item): mixed => $item instanceof Arrayable ? $item->toArray() : $item,
-            $paginator->items(),
-        ));
+        $items = [];
+
+        foreach ($paginator->items() as $item) {
+            if ($transform !== null && $item instanceof Model) {
+                $items[] = $transform($item);
+
+                continue;
+            }
+
+            $items[] = $item instanceof Arrayable ? $item->toArray() : $item;
+        }
+
+        return $items;
     }
 }

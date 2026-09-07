@@ -22,6 +22,7 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [`limits` — a payload többi része](#limits--a-payload-többi-része)
 - [Egy tábla definiálása](#egy-tábla-definiálása)
   - [Generálás](#generalas)
+- [Mi megy ki a sorokban](#mi-megy-ki-a-sorokban)
 - [Oszlopok](#oszlopok)
 - [Következtetés a modellből](#következtetés-a-modellből)
 - [Enumok](#enumok)
@@ -308,6 +309,76 @@ felépíthető. Egy controllerbeli fluent chain minden lekérésnél újraépít
 (new UserTable)->definition();        // header + body + footer — a kérésfüggetlen fél
 (new UserTable)->permissions();       // a FieldPermissions, amit az oszlopok kijelölnek
 ```
+
+---
+
+## Mi megy ki a sorokban
+
+Az `items` a lap, modellenként egy sor — és egy sor alapértelmezésben a **teljes modell**: minden,
+amit a `toArray()` kiad, függetlenül attól, olvassa-e oszlop.
+
+```php
+// Egy Column::make('last_name') oszlopú tábla, nyolcoszlopos modell felett
+{"id":1,"company_id":3,"first_name":"Ada","last_name":"Lovelace",
+ "email":"ada@example.test","status":"active","balance":500,"created_at":"2024-01-01T10:00:00Z"}
+```
+
+Ez egyszerre két dolog. **Adat, amit a tábla soha nem kért** — egy fel nem sorolt `notes`,
+`internal_score` vagy `deleted_reason` és a böngésző között egyedül a modell `$hidden`-je áll, amit
+a tábla definíciója meg sem említ. És **payload-méret**: egy huszonöt oszlopos modell öt oszlopot
+mutató tábla mögött ötszörös JSON-t küld, a `->with('company')` pedig minden sorhoz hozzáteszi a
+cég összes oszlopát.
+
+Az alapértelmezés szándékosan marad ez: a sor alakja is része annak, amit ez a csomag ígér, tehát
+mindenkinek leszűkíteni major változás lenne. Két mód van szűkebbet mondani:
+
+### `transform()`
+
+```php
+protected function transform(Model $model): array
+{
+    return $model->only(['id', 'first_name', 'last_name', 'status']);
+}
+```
+
+A hook dönti el, mivé lesz egy modell. API Resource, `->only()`, `makeHidden()`, egy számított
+érték — bármi, ami tömbbel válaszol. Ez az a válasz, ami nem tippelhet mellé, mert te írtad.
+
+### `$onlyDeclaredFields`
+
+```php
+final class UserTable extends AuraTable
+{
+    protected bool $onlyDeclaredFields = true;
+}
+```
+
+Minden sort azokra a mezőkre szűkít, amiket a **kiadott definíció megnevez** — abból a
+definícióból visszaolvasva, amit a böngésző megkap, nem másodszor deklarálva. Ugyanaz az érv, mint
+a mező-whitelistnél. Ami megnevezésnek számít:
+
+| A definícióban | Megmarad |
+| --- | --- |
+| egy header-cella `field`, `fields[]`, `reference`, `key` értéke | a mező, a többmezős oszlop tagjai, az action-oszlop azonosítója |
+| egy `columnConfigs` kulcs | a mező, amihez a renderer tartozik |
+| egy feltétel `key`-e | a mező, amit egy feltétel összehasonlít, saját oszlop nélkül is |
+| egy `{placeholder}` a route-ban | a mező, amiből a route soronként kitöltődik |
+
+A pontozott név a relációba szűkít: a `company.name` a `company`-t tartja meg benne a `name`-mel és
+semmi mással — beágyazott sorban és beágyazott lista minden sorában is. Ha a definíció a
+`company`-t és a `company.name`-et is megnevezi, a teljes cég marad: aki az egészet kérte, az nyer.
+
+A kettő komponálódik: a szűkítés arra fut, amit a `transform()` visszaadott. Két dolog pedig
+**utána** kerül a sorba, tehát nem szűkíthető el: a feltételekhez kellő numerikus konverzió, és a
+soronkénti jogosultsági flagek, amiknek akkor is ott kell lenniük, ha `false`-ok.
+
+**Amit nem lát: egy kézzel írt `merge()` payloadban megnevezett mező.** Ez az escape hatch ára, és
+ezért opt-in a kapcsoló ahelyett, hogy alapértelmezés lenne — egy kihagyott mező üresen hagy egy
+cellát. Ha `merge()`-dzsel nevezel meg mezőt, a kapcsoló helyett a `transform()`-ot használd.
+
+Ebből semmi nem jogosultságkezelés. Egy négy mezőre szűkített sor továbbra is négy mező annak, aki
+meg tudja nyitni a táblát; hogy hol van a határ valójában, azt a
+[Soronkénti jogosultság](#soronkénti-jogosultság) mondja meg.
 
 ---
 
@@ -1538,12 +1609,16 @@ megnevezve.
 ### AuraPayload
 
 ```php
-AuraPayload::fromPaginator(Paginator|CursorPaginator $paginator): self
+AuraPayload::fromPaginator(Paginator|CursorPaginator $paginator, ?callable $transform = null): self
 $payload->toArray(): array   // ['items' => …, 'meta' => …, 'links' => …]
 ```
 
-Az `items` a sorok nyers adattá lapítva, `array_values`-szal újraindexelve — egy lyukas kulcsú
-paginátor-oldal JSON-objektummá szerializálódna tömb helyett.
+Az `items` a sorok nyers adattá lapítva, újraindexelve — egy lyukas kulcsú paginátor-oldal
+JSON-objektummá szerializálódna tömb helyett.
+
+A `$transform` dönti el, mivé lesz egy modell; az `AuraTable::transform()` ezen keresztül megy le.
+Nélküle egy modell minden, amit nem rejt el — ezt várja az is, aki a saját paginátorát adja át.
+Csak modellt kap meg: egy sima tömbökből álló lap már valaki más alakja.
 
 **Csak a `LengthAwarePaginator` működik.** A szerződés megköveteli a `meta.last_page`-et és a
 `meta.total`-t, ezeket viszont sem a `simplePaginate()`, sem a `cursorPaginate()` nem ismeri, mert

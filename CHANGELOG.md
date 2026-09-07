@@ -8,6 +8,32 @@ version is independent of the package version.
 
 ### Added
 
+- **A tábla eldöntheti, mi megy ki egy sorban: `AuraTable::transform()` és
+  `protected bool $onlyDeclaredFields`.** Egy sor eddig kivétel nélkül a *teljes* modell volt —
+  minden, amit a `toArray()` kiad —, függetlenül attól, hány oszlopot definiált a tábla. Egyetlen
+  `Column::make('last_name')` mellett is kiment az `email`, a `company_id` és minden más nem rejtett
+  attribútum, egy `->with('company')` pedig soronként a cég összes oszlopát is elvitte. Két baj egy
+  helyen: a fel nem sorolt attribútum (`notes`, `internal_score`) és a böngésző között egyedül a
+  modell `$hidden`-je állt, amit a tábla definíciója meg sem említ, és a payload többszöröse volt a
+  szükségesnek.
+
+  - `transform(Model $model): array` — a hook, ami eldönti, mivé lesz egy modell. API Resource,
+    `->only()`, `makeHidden()`, számított mező: bármi, ami tömbbel válaszol.
+  - `$onlyDeclaredFields = true` — minden sort a **kiadott definíció** által megnevezett mezőkre
+    szűkít: `field`, `fields[]`, `reference`, `key`, a `columnConfigs` kulcsai, a feltételek `key`-e
+    és a route-ok `{placeholder}`-ei. Ugyanaz az elv, mint a mező-whitelistnél: abból olvassuk
+    vissza, amit a böngésző megkap, nem deklaráljuk másodszor. A pontozott név a relációba szűkít
+    (`company.name` → `company: {name}`), a kettő pedig komponálódik: a szűkítés arra fut, amit a
+    `transform()` visszaadott.
+  - `AuraPayload::fromPaginator()` új, opcionális második paramétert kapott (`?callable $transform`);
+    `null` esetén a mai viselkedés marad.
+
+  **Az alapértelmezés nem változik**, és ez kompatibilitási döntés: a sor alakja publikus felület
+  (lásd a `VersioningTest` „a publikus felület két felület" szabályát), tehát mindenkinek
+  leszűkíteni major változás lenne. A kapcsoló nem lát egy kézzel írt `merge()` payloadban
+  megnevezett mezőt — ezért opt-in, és ezért a `transform()` a teljes válasz. A numerikus konverzió
+  és a soronkénti jogosultsági flagek a szűkítés **után** kerülnek a sorba, tehát nem eshetnek ki.
+
 - **`Column::elementsMap(array $elements)` — the filter options as an explicit value → label map.**
   `elements()` takes both shapes the contract allows (a list, where the value *is* the label, and a
   value → label map), and PHP cannot tell them apart when the keys run `0, 1, 2…`: it normalises the
