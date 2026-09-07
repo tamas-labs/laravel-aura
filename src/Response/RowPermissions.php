@@ -104,24 +104,6 @@ final class RowPermissions
     }
 
     /**
-     * Does this table gate anything at all? The whole pass is skipped when not.
-     */
-    public function isEmpty(): bool
-    {
-        return $this->factories === [];
-    }
-
-    /**
-     * The emitted flag names, in registration order.
-     *
-     * @return list<string>
-     */
-    public function fields(): array
-    {
-        return array_keys($this->factories);
-    }
-
-    /**
      * Write every flag into every row.
      *
      * The models and the rows are the same page in the same order — the payload

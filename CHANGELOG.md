@@ -246,6 +246,20 @@ version is independent of the package version.
   to reality; what disappeared was the fact that two public repositories published two contradictory
   truths.
 
+### Removed
+
+- **`RowPermissions::isEmpty()` és `fields()` (audit M7).** Egyiket sem hívta semmi — sem a `src/`,
+  sem a `tests/`, sem a `workbench/` —, és a hívó oldalon egyik sem hozott volna semmit: az
+  `isEmpty()` docblockja azt állította, hogy „the whole pass is skipped when not”, de a kihagyást
+  az `apply()` saját korai `return`-je végzi, és az egyetlen dolog, amit egy hívás megspórolt
+  volna, az `array_values($paginator->items())`. A `fields()`-re pedig azért nincs szükség, mert a
+  `RowFields` szűkítés a jelzők beírása *előtt* fut, tehát nem kell tudnia a nevüket.
+
+  Az osztály `@internal`, tehát ez nem szemver-esemény: sem a `tests/Docs/public-surface.txt`, sem
+  a két teljes README nem nevezte meg őket, és a `bc-check` átugorja azt a szimbólumot, aminek a
+  régi docblockja `@internal` volt. A `Response/RowPermissions` fedettsége 87,5 %-ról 95,5 %-ra
+  nőtt attól, hogy elfogyott alóla a soha nem futó kód.
+
 ### Fixed
 
 - **A `Column::actions()` docblockja olyan ellenőrzést állított, ami nincs (audit M2).** A szöveg
