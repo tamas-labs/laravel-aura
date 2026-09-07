@@ -23,18 +23,6 @@ use TamasLabs\Aura\AuraContract;
 $readmes = ['README.en.md', 'README.hu.md'];
 
 /**
- * One of the full references, as text.
- */
-function auraReadme(string $file): string
-{
-    $contents = file_get_contents(__DIR__.'/../'.$file);
-
-    Assert::assertNotFalse($contents, "Cannot read {$file}");
-
-    return $contents;
-}
-
-/**
  * The package manifest, decoded.
  *
  * @return array<string, mixed>
@@ -90,7 +78,7 @@ it('states the contract version the constant actually holds', function () use ($
     $stated = '/`AuraContract::VERSION`[^\n]*\*\*'.preg_quote(AuraContract::VERSION, '/').'\*\*/';
 
     foreach ($readmes as $readme) {
-        expect(preg_match($stated, auraReadme($readme)))
+        expect(preg_match($stated, auraPackageFile($readme)))
             ->toBe(1, "{$readme} does not state contract version ".AuraContract::VERSION);
     }
 });
@@ -99,7 +87,7 @@ it('quotes the PHP and Laravel constraints composer.json requires', function () 
     $constraints = [auraRequires('php'), auraRequires('illuminate/support')];
 
     foreach ($readmes as $readme) {
-        $contents = auraReadme($readme);
+        $contents = auraPackageFile($readme);
 
         foreach ($constraints as $constraint) {
             // `toContain()` takes needles, not a message — so the assertion
@@ -325,6 +313,6 @@ it('points at the package it lives in', function () {
 
 it('names the Vue package on the other end of the contract', function () use ($readmes) {
     foreach ($readmes as $readme) {
-        expect(auraReadme($readme))->toContain('@tamas-labs/aura`');
+        expect(auraPackageFile($readme))->toContain('@tamas-labs/aura`');
     }
 });

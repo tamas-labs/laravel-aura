@@ -209,6 +209,36 @@ it('carries no CSRF middleware in the packaged default', function (): void {
         ->and($middleware)->toBe(config('aura.errors.middleware'));
 });
 
+it('rate-limits in the packaged default', function (): void {
+    // The throttle is the only cap on the endpoint: nothing authenticates it,
+    // and the fingerprint deduplicates repeats of one error rather than a flood
+    // of varied ones. Dropping it from the default would be a silent change of
+    // what an unauthenticated route can write.
+    $middleware = ErrorIngestConfig::MIDDLEWARE;
+
+    expect($middleware)->toContain('throttle:60,1')
+        ->and(config('aura.errors.middleware'))->toContain('throttle:60,1');
+});
+
+it('says how to close the endpoint, in both references and in the config file', function (): void {
+    // The route is unauthenticated by design, which makes the guidance the only
+    // mitigation the package ships. It has to say what to add as well as what
+    // not to — and it has to say it in both languages, which is how the two
+    // references drift apart.
+    foreach (['README.en.md', 'README.hu.md'] as $reference) {
+        $readme = auraPackageFile($reference);
+
+        expect($readme)->toContain("'middleware' => ['throttle:60,1', 'auth'],")
+            ->and($readme)->toContain('credentials')
+            ->and($readme)->toContain('client_max_body_size');
+    }
+
+    $config = auraPackageFile('config/aura.php');
+
+    expect($config)->toContain("'middleware' => ['throttle:60,1', 'auth'],")
+        ->and($config)->toContain('client_max_body_size');
+});
+
 it('writes one log line per record on the log driver', function (): void {
     auraEnableIngest(['driver' => 'log']);
 

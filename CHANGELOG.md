@@ -95,6 +95,33 @@ version is independent of the package version.
 
 ### Changed
 
+- **Az error-endpoint kitettsége ki van mondva, nem csak a hiánya (audit K4).** A route-ot semmi
+  nem hitelesíti — ez tervezett, mert a jelentést egy natív `fetch()` küldi CSRF-token nélkül —, de
+  eddig csak az szerepelt a dokumentációban, mit **ne** tegyünk a `middleware` listába. A csomagolt
+  alapértékekkel egy IP percenként 60 kérést × `max_entries` 100 bejegyzést, azaz **6 000 sort**
+  írhat, és a fingerprint ezen nem segít: az *ugyanazon* hiba ismétlődéseit vonja össze, egy
+  variált `message` másik hiba. Új „Ki POST-olhat rá" / „Who can post to it" szakasz mindkét teljes
+  README-ben, és bővebb komment a `config/aura.php`-ban:
+
+  - mit **érdemes** hozzáadni (`['throttle:60,1', 'auth']`), és a feltétel, ami mellett működik:
+    azonos origin (a `fetch()` alapértelmezése a `credentials: 'same-origin'`, tehát a session
+    cookie kimegy; cross-origin végpontra semmilyen cookie nem megy), és minden jelentő oldal
+    bejelentkezett oldal;
+  - hogy **bármi, ami elutasít, ugyanaz a hurok, mint a `web` csoport 419-e**: négy újrapróbálás,
+    a köteg vissza a sor elejére, és legfeljebb ötperces backoff mögött ismétlés — örökké,
+    böngészőfülenként;
+  - hogy az `errorReportingApiKey` és a cookie-guard mögötti cross-origin végpont csak
+    hitelesítésnek látszik;
+  - hogy a `max_payload` **tárolásvédelem, nem memóriavédelem**: a `strlen($request->getContent())`
+    mérésekor a PHP a törzset már bepufferelte, tehát a folyamatot a webszerver plafonja védi
+    (`client_max_body_size`, `post_max_size`);
+  - és hogy prune parancs továbbra sincs — a retenció a hoszté, a másolható ütemezett job a
+    „Tárolás" szakaszban van.
+
+  Két új teszt köti ezt a kódhoz: az egyik a csomagolt default rátakorlátját pineli (ez az egyetlen
+  plafon egy hitelesítetlen végponton), a másik azt, hogy a `middleware`-példa és a webszerver-limit
+  **mindkét** referenciában és a config fájlban is szerepel.
+
 - **Two new `illuminate/*` dependencies** (`log`, `routing`) for the error-log endpoint — both
   with the same `^12.0 || ^13.0` constraint guarded by `tests/VersioningTest.php`.
 - **The contract dependency is pinned (audit P8 — the last red release blocker).**

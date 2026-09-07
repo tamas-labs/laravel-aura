@@ -57,6 +57,7 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [Kivételek](#kivételek)
 - [Hibajelentés fogadása](#hibajelentés-fogadása)
   - [Bekapcsolás](#bekapcsolás)
+  - [Ki POST-olhat rá](#ki-post-olhat-rá)
   - [Ami megérkezik](#ami-megérkezik)
   - [Amit válaszol](#amit-válaszol)
   - [Konfiguráció](#konfiguráció-1)
@@ -1679,6 +1680,56 @@ app.use(Aura, {
 > hálózati fület. Egy deploymentet meg tud jelölni; hitelesíteni nem tud. A szerveroldali
 > jogosultság a `middleware` listába való.
 
+### Ki POST-olhat rá
+
+A route-ot semmi nem hitelesíti, és ez szándékos: a jelentést egy böngésző küldi natív
+`fetch()`-csel, és azok a jelentések érnek valamit, amik egy már hibás oldalról jönnek. Ettől még
+ez olyan döntés, amit meg kell erősíteni, nem olyan, amit örökölni kell.
+
+A csomagolt alapértékekkel egy IP percenként `throttle:60,1` kérést írhat × `max_entries` 100 =
+**percenként 6 000 bejegyzés**. A fingerprint ezen nem segít: az *ugyanazon* hiba ismétlődéseit
+vonja össze, egy variált `message` pedig definíció szerint másik hiba. A rátakorlát az árvízvédelem;
+a fingerprint sosem volt az.
+
+**Amit hozzáadsz, annak tudnia kell 2xx-szel felelni egy jogos jelentőnek.** Egy elutasító
+middleware pontosan úgy viselkedik, mint a `web` csoport 419-e: a köteg négyszer újrapróbálódik,
+visszakerül a sor **elejére**, és egy legfeljebb ötperces backoff mögött ismétlődik — örökké,
+böngészőfülenként, a legfrissebb 100 hibát megtartva, a többit eldobva.
+
+```php
+// Azonos origin, session cookie: a fetch() alapértelmezése a
+// `credentials: 'same-origin'`, tehát a session cookie kimegy, és egy guard elolvassa.
+'middleware' => ['throttle:60,1', 'auth'],
+```
+
+Ez addig áll, amíg minden jelentő oldal olyan oldal, amire a felhasználó be van jelentkezve. Egy
+login képernyő nem az, és minden ilyen fül a bezárásáig újrapróbálkozik. Ha a tábla kizárólag a
+guard mögött jelenik meg, a csere biztonságos; ha nem, hagyd nyitva a route-ot, és korlátozd
+rátában.
+
+Két dolog, ami hitelesítésnek látszik, de nem az:
+
+- **`errorReportingApiKey`.** Az Aura `Authorization: Bearer …` fejlécként küldi a böngészőből,
+  tehát mindenki hálózati fülében ott van. Egy deploymentet meg tud nevezni; hitelesíteni nem tud.
+- **Cross-origin végpont cookie-alapú guard mögött.** Egy másik originre küldött jelentés
+  egyáltalán nem visz cookie-t — az alapértelmezés a `same-origin`, nem az `include` —, tehát a
+  guard minden köteget elutasít, és a fenti hurok az egyetlen kimenetel. A demó alkalmazás pont
+  ebben a helyzetben van.
+
+A legolcsóbb valódi válasz gyakran egyik sem: hagyd nyitva a route-ot, tartsd meg a rátakorlátot,
+és tedd a végpontot oda, ahová a publikus internet nem ér el — belső hostnév mögé, vagy egy
+IP-allowlist mögé.
+
+**A `max_payload` tárolásvédelem, nem memóriavédelem.** A mérése
+`strlen($request->getContent())`, ekkorra viszont a PHP az egész törzset már beolvasta és
+bepufferelte. A folyamatot a webszerver plafonja védi — nginxen a `client_max_body_size`, PHP-ban a
+`post_max_size`. Azt is állítsd be: a `max_payload` azt dönti el, mi kerül *tárolásra*, nem azt,
+mi kerül *beolvasásra*.
+
+**És semmi nem takarít.** Prune parancs szándékosan nincs — a retenció a hoszt döntése, és egy
+könyvtár, ami általad nem írt ütemezés szerint töröl sorokat, más ígéret. A másolásra érdemes
+ütemezett job a [Tárolás](#tárolás) alatt van.
+
 ### Ami megérkezik
 
 Egy köteg, és semmi más:
@@ -1733,7 +1784,7 @@ Minden kulcs az `aura.errors` alatt:
 | --- | --- | --- |
 | `enabled` | `env('AURA_ERRORS_ENABLED', false)` | létezik-e egyáltalán a route |
 | `path` | `aura/errors` | hol van regisztrálva |
-| `middleware` | `['throttle:60,1']` | mi mögött fut — soha nem `web` |
+| `middleware` | `['throttle:60,1']` | mi mögött fut — soha nem `web`; lásd [Ki POST-olhat rá](#ki-post-olhat-rá) |
 | `driver` | `log` | `log` vagy `database` |
 | `channel` | `null` | log channel a `log` driverhez |
 | `table` | `aura_errors` | tábla a `database` driverhez |
@@ -1845,8 +1896,9 @@ A `*Validator` sorok azok, amikkel itt kezdeni kell valamit: mindegyik egy konkr
 ### Ami ez nem
 
 **A payload telemetria, nem bizonyíték.** Böngészőből érkezik, tervezetten hitelesítetlenül, és
-bárki, aki eléri a route-ot, bármit beleírhat a logodba vagy a tábládba. Korlátozd rátában, és ne
-építs olyan riasztást, ami egy sort bármi bizonyítékának tekint.
+bárki, aki eléri a route-ot, bármit beleírhat a logodba vagy a tábládba. Korlátozd rátában, tedd
+elérhetetlenné, ahol tudod — [Ki POST-olhat rá](#ki-post-olhat-rá) az egész érvelés —, és ne építs
+olyan riasztást, ami egy sort bármi bizonyítékának tekint.
 
 ---
 

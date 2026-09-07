@@ -56,6 +56,7 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [Exceptions](#exceptions)
 - [Error reporting](#error-reporting)
   - [Switching it on](#switching-it-on)
+  - [Who can post to it](#who-can-post-to-it)
   - [What arrives](#what-arrives)
   - [What is answered](#what-is-answered)
   - [Configuration](#configuration-1)
@@ -1662,6 +1663,54 @@ app.use(Aura, {
 > deployment; it cannot authenticate one. Server-side authorisation belongs in the `middleware`
 > list.
 
+### Who can post to it
+
+Nothing authenticates the route, and that is deliberate: the reporter is a browser sending a
+native `fetch()`, and the reports worth having come from a page that is already broken. It is
+still a decision to confirm rather than to inherit.
+
+With the packaged defaults one IP can write `throttle:60,1` requests a minute × `max_entries` of
+100 = **6 000 entries a minute**. The fingerprint does not help with that: it merges repeats of
+the *same* error, and a varied `message` is a different error by definition. The throttle is the
+flood control; the fingerprint never was.
+
+**Whatever you add has to be able to answer 2xx for a legitimate reporter.** A middleware that
+rejects behaves exactly like the `web` group's 419: the batch is retried four times, put back at
+the front of the queue and repeated behind a backoff that tops out at five minutes — forever, per
+browser tab, keeping the newest 100 errors and dropping the rest.
+
+```php
+// Same-origin application, session cookies: fetch() defaults to
+// `credentials: 'same-origin'`, so the session cookie is sent and a guard can read it.
+'middleware' => ['throttle:60,1', 'auth'],
+```
+
+That holds while every page that reports is a page the user is logged into. A login screen that
+reports an error is not, and each such tab retries until it is closed. If the table only ever
+renders behind the guard, the trade is safe; if not, leave the route open and rate-limit it.
+
+Two things that look like authentication and are not:
+
+- **`errorReportingApiKey`.** Aura sends it as `Authorization: Bearer …` from the browser, so it
+  is in everyone's network tab. It can name a deployment; it cannot authenticate one.
+- **A cross-origin endpoint behind a cookie guard.** A report sent to another origin carries no
+  cookies at all — `same-origin` is the default, not `include` — so the guard rejects every batch,
+  and the loop above is the only outcome. This is the case the demo application is in.
+
+The cheapest real answer is often neither: keep the route open, keep the throttle, and put the
+endpoint where the public internet does not reach it — an internal hostname, or an IP allow-list
+in front of it.
+
+**`max_payload` is storage protection, not memory protection.** It is measured as
+`strlen($request->getContent())`, by which point PHP has read and buffered the whole body. The
+ceiling that protects the process is the web server's — `client_max_body_size` in nginx,
+`post_max_size` in PHP. Set one of those as well: `max_payload` decides what gets *stored*, not
+what gets *read*.
+
+**And nothing prunes.** There is no prune command on purpose — retention is a host decision, and a
+library that deletes rows on a schedule you did not write is a different promise. The scheduled
+job worth copying is under [Storing](#storing).
+
 ### What arrives
 
 A batch, and nothing else:
@@ -1718,7 +1767,7 @@ Every key lives under `aura.errors`:
 | --- | --- | --- |
 | `enabled` | `env('AURA_ERRORS_ENABLED', false)` | whether the route exists at all |
 | `path` | `aura/errors` | where it is registered |
-| `middleware` | `['throttle:60,1']` | what it runs behind — never `web` |
+| `middleware` | `['throttle:60,1']` | what it runs behind — never `web`; see [Who can post to it](#who-can-post-to-it) |
 | `driver` | `log` | `log` or `database` |
 | `channel` | `null` | log channel for the `log` driver |
 | `table` | `aura_errors` | table for the `database` driver |
@@ -1828,8 +1877,9 @@ package generated, with the field name in `key`.
 ### What this is not
 
 **The payload is telemetry, not evidence.** It arrives from a browser, unauthenticated by design,
-and anyone who can reach the route can post anything into your log or table. Rate-limit it, and do
-not build alerting that treats a row as proof of anything.
+and anyone who can reach the route can post anything into your log or table. Rate-limit it, keep
+it out of reach where you can — [Who can post to it](#who-can-post-to-it) is the whole of that
+argument — and do not build alerting that treats a row as proof of anything.
 
 ---
 

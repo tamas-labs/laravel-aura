@@ -97,6 +97,23 @@ return [
         // batch behind an exponential backoff. Do not add `web` or
         // `VerifyCsrfToken` here. `throttle` is the default because a table
         // that is failing reports every 30 seconds, per browser tab.
+        //
+        // What to add is the other half of that sentence. Nothing here
+        // authenticates the route: with these defaults one IP can write 60
+        // requests a minute of `max_entries` each, and the fingerprint only
+        // merges repeats of the *same* error — a varied message is a new row.
+        // A guard is welcome, as long as it can answer 2xx for a legitimate
+        // reporter, because whatever it rejects it will be handed again for as
+        // long as the tab is open:
+        //
+        //   'middleware' => ['throttle:60,1', 'auth'],
+        //
+        // works when every page that reports is a page the user is logged into
+        // and the endpoint is same-origin — `fetch()` defaults to
+        // `credentials: 'same-origin'`, so the session cookie is sent, and a
+        // cross-origin endpoint gets no cookie at all. Otherwise leave the
+        // route open, keep the throttle, and put it where the public internet
+        // does not reach it. The READMEs work through this.
         'middleware' => ['throttle:60,1'],
 
         // `log` writes through a log channel and needs no infrastructure;
@@ -120,6 +137,12 @@ return [
         // 100-entry batch is not bounded by anything on the browser side.
         // Over this the answer is 413 — one of the few codes worth spending,
         // because no retry can make the batch smaller.
+        //
+        // Storage protection, not memory protection: it is measured with
+        // `strlen($request->getContent())`, and by then PHP has read and
+        // buffered the whole body. The ceiling that protects the process is the
+        // web server's — `client_max_body_size`, `post_max_size` — and this one
+        // decides what gets stored, not what gets read.
         'max_payload' => 1048576,
 
         // Entries accepted from one batch. The client's own queue caps at 100;

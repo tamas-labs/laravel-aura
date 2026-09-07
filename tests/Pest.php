@@ -226,3 +226,19 @@ function assertMatchesAuraConfig(array $config, string $field = 'demo'): void
         'body' => ['columnConfigs' => [$field => $config]],
     ]));
 }
+
+/**
+ * One of the package's own files, as text — a reference, the config file.
+ *
+ * For the tests that bind a documented claim to the thing it describes. Lives
+ * here rather than beside its first caller: two test files declaring it at file
+ * scope is a fatal redeclaration, not a shadowed copy.
+ */
+function auraPackageFile(string $file): string
+{
+    $contents = file_get_contents(__DIR__.'/../'.$file);
+
+    Assert::assertNotFalse($contents, "Cannot read {$file}");
+
+    return $contents;
+}
