@@ -298,6 +298,39 @@ version is independent of the package version.
 
 ### Fixed
 
+- **Az `illuminate/cache` hiányzott a követelménylistából, és a lista olyat ígért, amit a kód nem
+  tud tartani (audit M10).** Az audit azt kérdezte, hogy az `illuminate/console` nem lehetne-e
+  inkább `suggest` — hiszen a két parancsot a provider csak `runningInConsole()` mellett
+  regisztrálja, tehát egy szűk, granulált `illuminate/*` telepítésben fölösleges csomag. A válasz
+  nem, és az ok az, hogy **az a telepítés nem létezik**: a `src/` 15 helyen hív `config()`-ot, 6
+  helyen `report()`-ot és 3 helyen `app()`-ot, ezek pedig mind az
+  `Illuminate\Foundation\helpers.php`-ban vannak deklarálva, amit egyetlen komponens sem szállít
+  (az `illuminate/foundation` a Packagiston Laravel 4-nél abbahagyott csomag). A követelményt tehát
+  a `laravel/framework` elégíti ki, ami viszont mind a kilenc komponenst `replace`-eli — így az
+  `illuminate/console` requireolása egy bájtot sem tölt le, `suggest`-be tenni pedig azt jelentené,
+  hogy a `src/Console/` olyan ősosztályokat nevez meg, amiket a manifest nem.
+
+  Ami menet közben tényleg hiányzónak bizonyult, az az **`illuminate/cache`**: a definíció-cache a
+  `Cache` facade-on át megy, aminek az osztálya az `illuminate/support`-ban van, tehát a forrásban
+  semmi nem mutatott a mögötte lévő komponensre. Bekerült a `require`-be — a `composer update
+  --lock` „Nothing to modify in lock file”-lal válaszolt rá, ami egyben a fenti `replace`-érv mérése is.
+
+  Mindkét teljes README követelménylistája azt írta, hogy „az `illuminate/*` komponensek, nem a
+  framework-csomag”; ez most azt mondja, ami igaz — a komponensek azt adják meg, *hogyan van
+  megfogalmazva* a megkötés, kielégíteni a `laravel/framework` elégíti ki. Ugyanez a téves
+  indoklás szerepelt a `Support\Messages` és az `Errors\ErrorBatch` docblockjában is (a
+  `trans()` / `__()` és a `FormRequest` kapcsán); mindkettő javítva, a `FormRequest` valódi oka
+  — hogy a 422-es hibamódja pont az, amit az endpoint kizár — ott marad, ahol volt.
+
+  Egy új teszt a `VersioningTest`-ben **mindkét irányban** rögzíti a listát: minden komponens, amit
+  a szállított kód megnevez, szerepel a `require`-ben, és minden `require`-elt komponenst megnevez a
+  kód. A forrásoldal két helyről áll össze, mert egyik sem látja az egészet — az importok a
+  névtér-gyökérrel nevezik meg a komponenst, a facade-ok viszont nem (a `Log`, a `Route` és a `Lang`
+  osztálya az `illuminate/support`-ban van), és egy leképezetlen facade megbuktatja a tesztet
+  ahelyett, hogy némán átengedné. Négy mutáció ellenőrizve: az `illuminate/cache` elvétele, az
+  `illuminate/console` elvétele, egy nem használt komponens felvétele és egy leképezetlen facade
+  importálása mind piros.
+
 - **A követelménylista a PHP 8.5-ről az ellenkezőjét állította annak, amit a CI csinál (audit M9).**
   Mindkét teljes README azt írta, hogy „a CI-mátrix 8.3-at és 8.4-et futtat; a constraint a 8.5-öt
   is engedi, az még nincs tesztelve”, miközben a `ci.yml` 8.3 / 8.4 / 8.5 × Laravel 12 / 13-at

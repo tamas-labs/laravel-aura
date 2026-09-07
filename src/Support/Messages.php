@@ -14,12 +14,14 @@ use Illuminate\Support\Facades\Lang;
  * sites, and a reader looking for "what does this package say to a user" has a
  * single file to open.
  *
- * **`trans()` and `__()` are not available here.** They are declared in
- * `Illuminate\Foundation\helpers.php`, and `illuminate/foundation` is not among
- * the granular components this package requires — the same trap as
- * `app()->hasDebugModeEnabled()` in `Response\MissingFields` and `FormRequest`
- * in the error ingest. The `Lang` facade lives in `illuminate/support` and
- * reaches the same translator.
+ * **`trans()` and `__()` are declared in `Illuminate\Foundation\helpers.php`,
+ * which no `illuminate/*` component ships** — `illuminate/foundation` on
+ * Packagist is abandoned at Laravel 4, so that file arrives with
+ * `laravel/framework` or not at all. It is not a boundary this package keeps
+ * everywhere, and the requirement list in both READMEs says so: `config()` and
+ * `report()` come out of the same file. It is kept here because a seam whose
+ * whole job is naming the translator should name the component it needs — the
+ * `Lang` facade is in `illuminate/support` and reaches the same translator.
  *
  * Only what an end user can see goes through here. A message addressed to
  * whoever wrote the table — `InvalidDefinition` and everything else implementing

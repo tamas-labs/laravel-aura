@@ -119,11 +119,20 @@ The package is **not released**: no tag, not on Packagist. Install it from the r
 ## Requirements
 
 - **PHP** `^8.3` — the CI matrix runs 8.3, 8.4, 8.5
-- **Laravel** `^12.0 || ^13.0` — the `illuminate/*` components, not the framework package
+- **Laravel** `^12.0 || ^13.0` — written as `illuminate/*` components, satisfied by `laravel/framework`
 - A database driver Eloquent supports; the test suite runs on SQLite, and the `LIKE` escaping is
   written to behave identically on MySQL/MariaDB, PostgreSQL and SQLite
 - On the browser side, an Aura that reads **contract 1.0** — see [Versioning](#versioning), which is
   the version number that actually decides compatibility
+
+The components are how the constraint is *written*, not a claim that the package installs without the
+framework. `config()`, `report()` and `app()` are declared in `Illuminate\Foundation\helpers.php`,
+which no component ships — `illuminate/foundation` on Packagist is abandoned at Laravel 4 — so
+`laravel/framework` is what actually satisfies the requirement. Listing components costs nothing on
+the way there: the framework `replace`s every one of them, so a normal install resolves each to the
+framework itself and downloads no extra package. What it buys is that every component the code
+reaches for is named, and `tests/VersioningTest.php` pins that the list and the source agree in both
+directions — a component used and not required, or required and not used, fails the suite.
 
 ---
 

@@ -120,12 +120,22 @@ A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telep�
 ## Követelmények
 
 - **PHP** `^8.3` — a CI-mátrix ezeket futtatja: 8.3, 8.4, 8.5
-- **Laravel** `^12.0 || ^13.0` — az `illuminate/*` komponensek, nem a framework-csomag
+- **Laravel** `^12.0 || ^13.0` — `illuminate/*` komponensekként megfogalmazva, `laravel/framework`-kel kielégítve
 - Bármilyen Eloquent által támogatott adatbázis-driver; a teszt-suite SQLite-on fut, a `LIKE`
   escape-elés pedig úgy van megírva, hogy MySQL/MariaDB-n, PostgreSQL-en és SQLite-on egyformán
   viselkedjen
 - A böngésző oldalán olyan Aura, ami az **1.0 szerződést** olvassa — lásd a
   [Verziózás](#verziózás) szakaszt, mert valójában ez a verziószám dönti el a kompatibilitást
+
+A komponensek azt mondják meg, hogyan *van megfogalmazva* a megkötés — nem azt, hogy a csomag
+framework nélkül is telepíthető. A `config()`, a `report()` és az `app()` az
+`Illuminate\Foundation\helpers.php`-ban van deklarálva, amit egyetlen komponens sem szállít (az
+`illuminate/foundation` a Packagiston Laravel 4-nél abbahagyott csomag), tehát a követelményt
+valójában a `laravel/framework` elégíti ki. A komponensek felsorolása ettől nem kerül semmibe: a
+framework mindegyiket `replace`-eli, így egy szokásos telepítés mindet önmagára oldja fel, és egyetlen
+plusz csomagot sem tölt le. Amit viszont hoz: minden komponens néven van nevezve, amit a kód elér, és
+a `tests/VersioningTest.php` mindkét irányban rögzíti, hogy a lista és a forrás egyezik — egy használt,
+de nem követelt, vagy egy követelt, de nem használt komponens megbuktatja a suite-ot.
 
 ---
 

@@ -27,10 +27,11 @@ use Illuminate\Validation\Rule;
  * fields, and a receiver that rejects the batch over one of them would reject
  * it forever.
  *
- * This is deliberately **not** a `FormRequest`. That class lives in
- * `Illuminate\Foundation`, which is not one of the granular `illuminate/*`
- * components this package requires — and a FormRequest's failure mode is the
- * 422 the paragraph above rules out.
+ * This is deliberately **not** a `FormRequest`, and the reason is the answer
+ * rather than the dependency list: a FormRequest's failure mode is the 422 the
+ * paragraph above rules out. That it also lives in `Illuminate\Foundation`,
+ * which no `illuminate/*` component ships, only means it could not be reached
+ * through a component either — see `Support\Messages`.
  *
  * @internal
  */

@@ -87,6 +87,88 @@ function auraRequires(string $package): string
     return $constraint;
 }
 
+/**
+ * The PHP this package actually ships.
+ *
+ * `src/` and the route file, and deliberately nothing else: `tests/` and
+ * `workbench/` are `export-ignore`d, so what they import is never a dependency
+ * of anybody's installation.
+ *
+ * @return list<string>
+ */
+function auraShippedSources(): array
+{
+    $sources = [auraPackageFile('routes/aura-errors.php')];
+
+    $tree = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator(__DIR__.'/../src', FilesystemIterator::SKIP_DOTS)
+    );
+
+    foreach ($tree as $file) {
+        if ($file instanceof SplFileInfo && $file->getExtension() === 'php') {
+            $contents = file_get_contents($file->getPathname());
+
+            Assert::assertNotFalse($contents, 'Cannot read '.$file->getPathname());
+
+            $sources[] = $contents;
+        }
+    }
+
+    return $sources;
+}
+
+/**
+ * Every `illuminate/*` component the shipped code names.
+ *
+ * Two sources, because neither one sees all of it. An import names its
+ * component in the namespace root — `Illuminate\Database\…` is
+ * `illuminate/database`. A facade does not: the class itself lives in
+ * `illuminate/support` and the component it reaches is behind it, which is why
+ * `illuminate/log`, `illuminate/routing` and `illuminate/translation` are
+ * required by a package that imports nothing from those three namespaces.
+ *
+ * @return list<string>
+ */
+function auraComponentsUsed(): array
+{
+    // What a facade resolves to. An unlisted one fails rather than passing
+    // quietly: a facade nobody mapped is a component nobody checked for.
+    $behindFacade = [
+        'Cache' => 'cache',
+        'DB' => 'database',
+        'Lang' => 'translation',
+        'Log' => 'log',
+        'Route' => 'routing',
+        'Schema' => 'database',
+        'Validator' => 'validation',
+    ];
+
+    $components = [];
+
+    foreach (auraShippedSources() as $source) {
+        preg_match_all('/^use Illuminate\\\\([A-Za-z]+)\\\\/m', $source, $roots);
+
+        foreach ($roots[1] as $root) {
+            $components[strtolower($root)] = true;
+        }
+
+        preg_match_all('/^use Illuminate\\\\Support\\\\Facades\\\\([A-Za-z]+);/m', $source, $facades);
+
+        foreach ($facades[1] as $facade) {
+            if (! array_key_exists($facade, $behindFacade)) {
+                Assert::fail("No component is mapped for the {$facade} facade — see auraComponentsUsed().");
+            }
+
+            $components[$behindFacade[$facade]] = true;
+        }
+    }
+
+    $names = array_keys($components);
+    sort($names);
+
+    return array_map(static fn (int|string $name): string => (string) $name, $names);
+}
+
 it('states the contract version the constant actually holds', function () use ($readmes) {
     // The constant and the version have to be on one line — the compatibility
     // table's own row. A bump that leaves the docs behind fails here.
@@ -133,6 +215,28 @@ it('requires one constraint for every Illuminate component', function () {
 
     expect($components)->not->toBeEmpty()
         ->and($constraints)->toHaveCount(1);
+});
+
+it('requires every Illuminate component the shipped code names, and no other', function () {
+    // The direction `composer install` can never check on its own. A component
+    // the code names and the manifest does not is a fatal in any installation
+    // that does not happen to carry it; a component the manifest names and
+    // nothing reaches for is a constraint on the host for no reason.
+    //
+    // `illuminate/cache` was the first of the two: the definition cache goes
+    // through the `Cache` facade, whose class is in `illuminate/support`, so
+    // nothing in the source pointed at the component behind it.
+    $required = array_map(
+        static fn (int|string $package): string => substr((string) $package, strlen('illuminate/')),
+        array_values(array_filter(
+            array_keys(auraDigArray(auraManifest(), 'require')),
+            static fn (int|string $package): bool => str_starts_with((string) $package, 'illuminate/'),
+        )),
+    );
+
+    sort($required);
+
+    expect(auraComponentsUsed())->toBe($required);
 });
 
 it('names the PHP versions CI actually runs', function () {
