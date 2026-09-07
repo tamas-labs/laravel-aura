@@ -144,6 +144,23 @@ version is independent of the package version.
 
 ### Fixed
 
+- **A `Column::actions()` docblockja olyan ellenőrzést állított, ami nincs (audit M2).** A szöveg
+  szerint a definíció felépítésekor „mindkettő ellenőrzött": hogy más oszlop nem viszi ugyanazt a
+  kulcsot, **és** hogy a placeholder által megnevezett mező eljut a böngészőig a sorokban. Az első
+  igaz (`assertKeysAreUnique()` → `actionKeyTaken`), a második sehol nincs — a
+  `Column::actions('not_a_field', Action::edit())` felépül, és a hamis állítás pont ott adott
+  biztonságérzetet, ahol a hiba csendes.
+
+  A docblock és mindkét teljes README „A kulcs placeholder, nem név" szakasza most azt mondja, ami
+  igaz: az egyediség kikényszerített, a másik fele viszont **nem ellenőrizhető** — a definíció még
+  sorok nélkül épül, és egy olyan kulcs, amit egyik oszlop sem említ, szabályos (a `slug` szerinti
+  route-model binding a szokásos eset). A következmény is szerepel, pontosan: az Aura a fel nem
+  oldható placeholdert **üres sztringre** cseréli (`resolve-route.ts`), tehát a
+  `{base}/{id}/edit`-ből `/users//edit` lesz, a `renderIconNode` pedig a `route && key` páron
+  kapuz — mindkettő megvan —, így kattintható link marad a semmibe, nem látványosan törött URL. Az
+  `Action::create()` a kivétel: az útvonalában nincs placeholder. **Kódváltozás nincs**, a
+  viselkedés ugyanaz; a leírása lett igaz.
+
 - **A `respond()` kétszer hívta a `query()`-t (audit M1).** A definíció felépítése a modellhez
   `$this->query()->getModel()`-t kért, a lapozás pedig ettől függetlenül egy másik buildert
   (`AuraQuery::paginate($this->query(), …)`). A `query()` a hoszt alkalmazás metódusa, és

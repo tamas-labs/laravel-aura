@@ -1060,6 +1060,15 @@ the payload.
 The same holds for a visible `id` column — `Column::make('id')->key('identifier')` — which keeps
 sorting and searching by `id`, because those travel by field.
 
+**Only half of that is enforced.** Two columns sharing the key is an `InvalidDefinition` on the
+first request. Whether the key names a field the rows actually carry is not checked, and cannot be:
+the definition is built before there are any rows, and a key no column mentions is perfectly
+legitimate — a route bound by a `slug` the table does not display is the ordinary case. So this one
+is yours to get right, and getting it wrong is quiet: Aura replaces a placeholder it cannot resolve
+with an empty string, so `{base}/{id}/edit` renders as `/users//edit`, and the icon is still wrapped
+in a link. A clickable link to nothing, rather than a visibly broken URL. `Action::create()` is the
+exception — its route carries no placeholder, so the key never reaches it.
+
 ---
 
 ### Escalation

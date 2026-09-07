@@ -1067,6 +1067,16 @@ belül azonosítja az oszlopot.
 Ugyanez áll egy látható `id` oszlopra is — `Column::make('id')->key('identifier')` —, ami továbbra
 is `id` szerint rendez és keres, mert azok a mező mentén utaznak.
 
+**Ebből csak a fele kikényszerített.** Ha két oszlop osztozik a kulcson, az az első kérésnél
+`InvalidDefinition`. Azt viszont, hogy a kulcs olyan mezőt nevez-e meg, amit a sorok valóban
+visznek, semmi nem ellenőrzi — és nem is tudja: a definíció még sorok nélkül épül fel, egy olyan
+kulcs pedig, amit egyik oszlop sem említ, teljesen szabályos, hiszen a `slug` szerinti
+route-model binding a szokásos eset. Ez tehát rajtad áll, és a tévedés csendes: az Aura a fel nem
+oldható placeholdert üres sztringre cseréli, így a `{base}/{id}/edit`-ből `/users//edit` lesz, az
+ikon pedig továbbra is linkbe csomagolva jelenik meg. Kattintható link a semmibe, nem látványosan
+törött URL. Az `Action::create()` a kivétel — az útvonalában nincs placeholder, oda a kulcs el sem
+jut.
+
 ---
 
 ### Eszkaláció

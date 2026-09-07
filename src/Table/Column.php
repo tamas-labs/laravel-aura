@@ -162,10 +162,22 @@ final class Column
      * `$key` is not a name this column chose. It is the **route placeholder**:
      * Aura writes it into the generated route (`{base}/{id}/edit`) and fills it
      * per row from the item field of the same name, so it has to be the
-     * identifier the rows carry — normally the model's primary key. Two things
-     * follow, and both are checked when the definition is built: no other
-     * column may hold that key, and the field the placeholder names has to
-     * reach the browser in the rows.
+     * identifier the rows carry — normally the model's primary key.
+     *
+     * Two things follow, and only the first is checked when the definition is
+     * built: no other column may hold this key
+     * ({@see InvalidDefinition::actionKeyTaken()}). That the key names a field
+     * reaching the browser is **not** checked and cannot be — there are no rows
+     * yet, and a key no column mentions is legitimate anyway, a route bound by
+     * a `slug` nothing displays being the ordinary case.
+     *
+     * Getting it wrong is silent, and silent at the far end. Aura substitutes a
+     * placeholder it cannot resolve with the empty string (`resolve-route.ts`),
+     * so `{base}/{id}/edit` renders as `/users//edit`, and `renderIconNode`
+     * gates the `<a>` on `route && key` — both of which are present. The result
+     * is a clickable link to a URL that is not there, not a visibly broken one.
+     * {@see Action::create()} is the exception: its route carries no
+     * placeholder, so the key never reaches it.
      *
      * Nothing is emitted into `body.columnConfigs`. The header states which
      * actions exist and the browser builds the rest, because the resource base
