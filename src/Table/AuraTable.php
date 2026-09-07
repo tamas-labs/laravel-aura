@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TamasLabs\Aura\Table;
 
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -303,17 +304,24 @@ abstract class AuraTable
             return $this->build();
         }
 
-        $cached = Cache::get($this->cacheKey());
+        $cache = $this->cache();
+        $cached = $cache->get($this->cacheKey());
 
         // Anything but the array we stored means the entry is not ours or no
         // longer has the shape we wrote; rebuilding is always correct.
+        //
+        // This is also why the pair is not a `remember()`: that returns whatever
+        // non-null value it finds, and would hand a tampered or stale entry
+        // straight to {@see TableBlueprint::fromArray()}. It would buy nothing
+        // in exchange — `remember()` holds no lock, so it races exactly as this
+        // does.
         if (is_array($cached)) {
             return TableBlueprint::fromArray($cached);
         }
 
         $blueprint = $this->build();
 
-        Cache::put($this->cacheKey(), $blueprint->toArray(), $this->cacheTtl);
+        $cache->put($this->cacheKey(), $blueprint->toArray(), $this->cacheTtl);
 
         return $blueprint;
     }
@@ -348,18 +356,59 @@ abstract class AuraTable
     /**
      * Cache key for the definition. Override when one table class serves
      * several shapes — per locale, say.
+     *
+     * The prefix is `aura.cache.prefix`, so bumping that one value misses every
+     * table's entry at once — the answer to "this deploy changed the columns"
+     * that needs neither a list of table classes nor a store supporting tags.
+     * `file` and `database` support none, so `Cache::tags()` is not open to a
+     * package that does not choose the driver. An override of this method
+     * builds its own key and the prefix does not reach it.
      */
     public function cacheKey(): string
     {
-        return 'aura.table.'.static::class;
+        return self::cachePrefix().static::class;
     }
 
     /**
      * Drop the cached definition; call after a deploy that changes the columns.
+     *
+     * Forgets from the configured store, and under the key {@see self::cacheKey()}
+     * answers *now* — after a prefix bump that is the new key, and the entries
+     * written under the old one are left to their TTL.
      */
     public function forgetCache(): void
     {
-        Cache::forget($this->cacheKey());
+        $this->cache()->forget($this->cacheKey());
+    }
+
+    /**
+     * The store the definition cache lives in.
+     *
+     * `aura.cache.store`, and `null` is the application's default — which is
+     * worth naming rather than inheriting: an `array` default makes the cache
+     * silently per-request, and per *worker* under Octane, where two workers can
+     * then serve two definitions built at different times.
+     */
+    private function cache(): Repository
+    {
+        $store = config('aura.cache.store');
+
+        return Cache::store(is_string($store) ? $store : null);
+    }
+
+    /**
+     * What {@see self::cacheKey()} puts in front of the class name.
+     *
+     * Defaulted here as well as in the config file: `mergeConfigFrom()` merges
+     * only the top level, so a host that published an older `aura.php` and
+     * later gained a `cache` section of its own would have this key missing
+     * rather than defaulted.
+     */
+    private static function cachePrefix(): string
+    {
+        $prefix = config('aura.cache.prefix');
+
+        return is_string($prefix) ? $prefix : 'aura.table.';
     }
 
     /**

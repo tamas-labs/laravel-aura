@@ -383,6 +383,65 @@ it('rebuilds rather than trusting a cache entry of the wrong shape', function ()
         ->and(CachedTable::$builds)->toBe(1);
 });
 
+it('keys the cache the way it always has, out of the box', function (): void {
+    // The prefix is config now, and its default has to reproduce the key
+    // byte-for-byte: a host upgrading into this change must not silently lose
+    // every warm entry it had.
+    expect((new CachedTable)->cacheKey())->toBe('aura.table.'.CachedTable::class);
+});
+
+it('writes the definition to the configured store, not the default', function (): void {
+    config()->set('cache.stores.aura_test', ['driver' => 'array']);
+    config()->set('aura.cache.store', 'aura_test');
+
+    (new CachedTable)->definition();
+
+    expect(Cache::store('aura_test')->get((new CachedTable)->cacheKey()))->toBeArray()
+        ->and(Cache::store('array')->get((new CachedTable)->cacheKey()))->toBeNull();
+});
+
+it('forgets from the configured store too', function (): void {
+    config()->set('cache.stores.aura_test', ['driver' => 'array']);
+    config()->set('aura.cache.store', 'aura_test');
+
+    CachedTable::$builds = 0;
+
+    (new CachedTable)->definition();
+    (new CachedTable)->forgetCache();
+    (new CachedTable)->definition();
+
+    // A `forgetCache()` that read the default store would drop nothing, and the
+    // second call would be served from the cache — the failure that looks like
+    // success.
+    expect(CachedTable::$builds)->toBe(2);
+});
+
+it('misses every table at once when the prefix moves', function (): void {
+    CachedTable::$builds = 0;
+
+    (new CachedTable)->definition();
+    $warm = (new CachedTable)->cacheKey();
+
+    config()->set('aura.cache.prefix', 'aura.table.v2.');
+
+    expect((new CachedTable)->cacheKey())->toBe('aura.table.v2.'.CachedTable::class)
+        ->and((new CachedTable)->definition())->toHaveKey('header')
+        ->and(CachedTable::$builds)->toBe(2)
+        // Missed, not flushed: the old entry is left to its TTL, and saying so
+        // is the difference between an answer and a half-answer.
+        ->and(Cache::get($warm))->toBeArray();
+});
+
+it('falls back to the packaged prefix when the config carries none', function (): void {
+    // `mergeConfigFrom()` merges only the top level, so a host that published an
+    // older `aura.php` and then added a `cache` section of its own arrives here
+    // with the key missing rather than defaulted.
+    config()->set('aura.cache', ['store' => null]);
+
+    expect((new CachedTable)->cacheKey())->toBe('aura.table.'.CachedTable::class)
+        ->and((new CachedTable)->definition())->toHaveKey('header');
+});
+
 it('does not widen the whitelist from a tampered cache entry', function (): void {
     Cache::put((new CachedTable)->cacheKey(), [
         'definition' => ['header' => ['rows' => [['cells' => [['content' => 'x', 'field' => 'x']]]]]],

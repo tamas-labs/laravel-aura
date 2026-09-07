@@ -67,6 +67,56 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Definition cache
+    |--------------------------------------------------------------------------
+    |
+    | Only read by a table that opts in with `protected bool $cache = true`.
+    | Both keys exist for the same reason: the definition cache is the package's
+    | own, and it should be possible to say where it lives and to invalidate all
+    | of it without naming every table class.
+    |
+    | There is deliberately no lock and no `remember()` here. A build is pure
+    | PHP — measured at 0.14 ms for eight columns and 0.49 ms for forty, each
+    | carrying a badge with two conditions — so a cold cache does not produce a
+    | thundering herd worth serialising: making the other requests wait on a
+    | lock costs a round trip to buy back half a millisecond of CPU. And
+    | `remember()` would return whatever non-null value it found, which is
+    | exactly the entry the read path refuses to trust.
+    |
+    */
+
+    'cache' => [
+
+        // Which cache store the definition goes to. `null` is the application's
+        // default — and the default is worth a thought before leaving it: an
+        // `array` store makes the cache silently per-request (per worker under
+        // Octane, which is worse: two workers can serve two different
+        // definitions), and a shared Redis under memory pressure can evict it
+        // at any time, which is harmless but means the cache never warms.
+        //
+        // Naming a store of its own also gives the group flush a driver cannot:
+        //
+        //   php artisan cache:clear aura
+        //
+        'store' => env('AURA_CACHE_STORE'),
+
+        // What the default `cacheKey()` puts in front of the table class name.
+        // Bumping it misses every table's entry at once, which is the answer to
+        // "the columns changed in this deploy" that does not need a list of
+        // table classes and does not need a store supporting tags — `file` and
+        // `database` do not, so `Cache::tags()` is not available to a package
+        // that cannot choose the driver.
+        //
+        //   AURA_CACHE_PREFIX=aura.table.v2.
+        //
+        // It misses rather than flushes: the old entries stay until their TTL
+        // runs out. A table overriding `cacheKey()` builds its own key and this
+        // does not reach it.
+        'prefix' => env('AURA_CACHE_PREFIX', 'aura.table.'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Error ingest
     |--------------------------------------------------------------------------
     |

@@ -20,6 +20,7 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [Telepítés](#telepítés)
 - [Konfiguráció](#konfiguráció)
   - [`limits` — a payload többi része](#limits--a-payload-többi-része)
+  - [`cache` — hol lakik a definíció-cache](#cache--hol-lakik-a-definíció-cache)
 - [Egy tábla definiálása](#egy-tábla-definiálása)
   - [Generálás](#generalas)
 - [Mi megy ki a sorokban](#mi-megy-ki-a-sorokban)
@@ -47,6 +48,9 @@ származnak — így nem tudnak elcsúszni egymástól.
 - [Csoportos header](#csoportos-header)
 - [Footer és beállítások](#footer-és-beállítások)
 - [A definíció cache-elése](#a-definíció-cache-elése)
+  - [Hol lakik](#hol-lakik)
+  - [Az összes ürítése](#az-összes-ürítése)
+  - [Se lock, se `remember()`](#se-lock-se-remember)
 - [Amit a tábla nem hajlandó felépíteni](#amit-a-tábla-nem-hajlandó-felépíteni)
 - [A query-réteg önmagában](#a-query-réteg-önmagában)
   - [FieldPermissions](#fieldpermissions)
@@ -165,6 +169,11 @@ return [
         'values' => 200,       // értékek egy szűrő-legördülőben
         'term' => 255,         // karakterek a `globalSearch`-ben és a `searchable[].term`-ben
     ],
+
+    'cache' => [
+        'store' => env('AURA_CACHE_STORE'),               // null = az alkalmazás alapértelmezettje
+        'prefix' => env('AURA_CACHE_PREFIX', 'aura.table.'),
+    ],
 ];
 ```
 
@@ -203,6 +212,19 @@ nincs miből plafont származtatnia.
 
 A hiányzó vagy nem pozitív configérték a csomagolt alapértékre esik vissza, nem a „nincs korlát"-ra
 — az a korlát, amit egy elrontott config ki tud kapcsolni, nem korlát.
+
+### `cache` — hol lakik a definíció-cache
+
+Csak az a tábla olvassa, amelyik a `protected bool $cache = true`-val bekapcsolta; lásd
+[A definíció cache-elése](#a-definíció-cache-elése).
+
+| Kulcs | Alapérték | Mit dönt el |
+| --- | --- | --- |
+| `cache.store` | `null` — az alkalmazás alapértelmezettje | melyik cache store-ba kerül a definíció |
+| `cache.prefix` | `aura.table.` | mit tesz az alapértelmezett `cacheKey()` az osztálynév elé |
+
+Mindkét alapérték azt a viselkedést adja vissza, ami előttük volt, tehát a rájuk való frissítés
+semmit nem mozdít el.
 
 ---
 
@@ -1425,6 +1447,58 @@ cache-elődik, aki elsőként kérte.
 A cache visszafelé nem megbízható forrás: egy bejegyzés, ami nem az általunk írt tömb,
 újraépítést vált ki, és a mezőlistákból minden nem-string kiesik. Egy elavult vagy megpiszkált
 bejegyzés nem tud whitelistet tágítani.
+
+### Hol lakik
+
+```php
+'cache' => [
+    'store' => env('AURA_CACHE_STORE'),   // null = az alkalmazás alapértelmezettje
+],
+```
+
+A `null` az alkalmazás alapértelmezett store-ja, és ezt érdemes végiggondolni, nem feltételezni.
+Egy `array` alapértelmezés mellett a cache némán kérésenkénti lesz — Octane alatt pedig
+*workerenkénti*, ahol két worker két, más időpontban felépült definíciót szolgálhat ki. Egy
+memóriahiánnyal küzdő közös Redis bármikor kidobhatja a bejegyzést: ez ártalmatlan, de azt
+jelenti, hogy a cache soha nem melegszik be.
+
+A saját store megnevezése ráadásul azt a csoportos ürítést is megadja, amit egyik driver sem:
+
+```bash
+php artisan cache:clear aura
+```
+
+### Az összes ürítése
+
+A `forgetCache()` táblánként hívandó, egy deploy viszont, ami az oszlopokat érintette, jellemzően
+többet érintett. A prefix az a válasz, aminek sem a tábla-osztályok listájára, sem konkrét
+driverre nincs szüksége:
+
+```bash
+AURA_CACHE_PREFIX=aura.table.v2.
+```
+
+Ettől minden alapértelmezett `cacheKey()` egyszerre mozdul. **Elvéti, nem üríti** — a régi
+bejegyzések a TTL-jük lejártáig maradnak —, és ahol a `cacheKey()` felül van írva, ott a tábla a
+saját kulcsát építi, amit a prefix nem ér el.
+
+A `Cache::tags()` rendesen ürítene, és szándékosan nem használjuk: a `file` és a `database` nem
+támogat tageket, egy csomag pedig, ami nem választja meg a drivert, olyan csoportos ürítést
+kínálna, ami az egyik hoston működik, a másikon némán nem csinál semmit.
+
+### Se lock, se `remember()`
+
+Egyik sem feledékenység.
+
+Egy build tiszta PHP, és **nyolc oszlopnál 0,14 ms, negyvennél 0,49 ms** — mindegyik oszlopon egy
+badge két feltétellel —, mérve, nem becsülve. Egy hideg cache nem termel akkora csordát, amit
+érdemes lenne sorba állítani: a lock miatt a többi kérés egy cache-körútra várna, hogy fél
+ezredmásodpercnyi CPU-t nyerjen vissza. Sok hoston a körút már eleve a párosból a drágább fél —
+ez a másik oka annak, hogy az egész opt-in.
+
+A `remember()` sem segítene. Nincs benne lock — ugyanaz az olvasás-írás versenyhelyzet, egyetlen
+hívásban —, és azt adja vissza, amit nem-`null`-ként talál: pontosan azt a bejegyzést, amiben a
+fenti bekezdés nem bízik meg.
 
 ---
 

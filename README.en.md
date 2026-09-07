@@ -19,6 +19,7 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [Installation](#installation)
 - [Configuration](#configuration)
   - [`limits` — the rest of the payload](#limits--the-rest-of-the-payload)
+  - [`cache` — where the definition cache lives](#cache--where-the-definition-cache-lives)
 - [Defining a table](#defining-a-table)
   - [Generating one](#generating-one)
 - [What goes out in the rows](#what-goes-out-in-the-rows)
@@ -46,6 +47,9 @@ fields the query will accept come out of the same definition, so they cannot dri
 - [Grouped headers](#grouped-headers)
 - [Footers and settings](#footers-and-settings)
 - [Caching the definition](#caching-the-definition)
+  - [Where it lives](#where-it-lives)
+  - [Invalidating all of them](#invalidating-all-of-them)
+  - [No lock, and no `remember()`](#no-lock-and-no-remember)
 - [What the table refuses to build](#what-the-table-refuses-to-build)
 - [The query layer on its own](#the-query-layer-on-its-own)
   - [FieldPermissions](#fieldpermissions)
@@ -163,6 +167,11 @@ return [
         'values' => 200,       // values in one filter dropdown
         'term' => 255,         // characters in `globalSearch` and `searchable[].term`
     ],
+
+    'cache' => [
+        'store' => env('AURA_CACHE_STORE'),               // null = the app's default
+        'prefix' => env('AURA_CACHE_PREFIX', 'aura.table.'),
+    ],
 ];
 ```
 
@@ -201,6 +210,19 @@ nothing on the server to derive a ceiling from.
 
 A missing or non-positive configured value falls back to the packaged default rather than to "no
 limit" — a limit a broken config can switch off is not a limit.
+
+### `cache` — where the definition cache lives
+
+Read only by a table that opted in with `protected bool $cache = true`; see
+[Caching the definition](#caching-the-definition).
+
+| Key | Default | Decides |
+| --- | --- | --- |
+| `cache.store` | `null` — the application's default | which cache store the definition goes to |
+| `cache.prefix` | `aura.table.` | what the default `cacheKey()` puts in front of the class name |
+
+Both defaults reproduce the behaviour that was there before them, so upgrading into these keys
+moves nothing.
 
 ---
 
@@ -1411,6 +1433,56 @@ asked first.
 The cache is treated as untrusted on the way back in: an entry that is not the array we wrote
 triggers a rebuild, and anything that is not a string is dropped from the field lists. A stale or
 tampered entry cannot widen a whitelist.
+
+### Where it lives
+
+```php
+'cache' => [
+    'store' => env('AURA_CACHE_STORE'),   // null = the application's default
+],
+```
+
+`null` is the application's default store, and that is worth a thought rather than an assumption.
+An `array` default makes the cache silently per-request — and per *worker* under Octane, where two
+workers can then serve two definitions built at different times. A shared Redis under memory
+pressure can evict the entry at any moment, which is harmless but means the cache never warms.
+
+Naming a store of its own also buys the group flush that no driver offers:
+
+```bash
+php artisan cache:clear aura
+```
+
+### Invalidating all of them
+
+`forgetCache()` is per table, and a deploy that changed the columns changed them in more than one.
+The prefix is the answer that needs neither a list of table classes nor a particular driver:
+
+```bash
+AURA_CACHE_PREFIX=aura.table.v2.
+```
+
+Every default `cacheKey()` moves at once. It **misses rather than flushes** — the old entries stay
+until their TTL runs out — and a table that overrides `cacheKey()` builds its own key, which the
+prefix does not reach.
+
+`Cache::tags()` would flush properly and is deliberately not used: `file` and `database` support
+no tags, and a package that does not choose the driver would be offering a group flush that works
+on some hosts and silently does nothing on others.
+
+### No lock, and no `remember()`
+
+Neither is an oversight.
+
+A build is pure PHP and costs **0.14 ms for eight columns and 0.49 ms for forty**, each carrying a
+badge with two conditions — measured, not estimated. A cold cache does not produce a herd worth
+serialising: a lock would make every other request wait on a cache round trip to buy back half a
+millisecond of CPU. On many hosts the round trip is the more expensive half of the pair already,
+which is the other reason this is opt-in.
+
+`remember()` would not help either. It holds no lock — it is the same read-then-write race in one
+call — and it returns whatever non-`null` value it finds, which is exactly the entry the paragraph
+above refuses to trust.
 
 ---
 

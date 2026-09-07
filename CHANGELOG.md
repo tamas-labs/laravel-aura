@@ -8,6 +8,35 @@ version is independent of the package version.
 
 ### Added
 
+- **A definíció-cache megmondható, hogy hol lakjon, és egyben üríthető (audit M5).** Az `AuraTable`
+  eddig közvetlenül a `Cache` facade-ot használta, tehát a definíció mindig az alkalmazás
+  alapértelmezett store-jába ment — akkor is, ha az egy `array` driver, ami mellett a cache némán
+  kérésenkénti (Octane alatt pedig *workerenkénti*, ahol két worker két, más időpontban felépült
+  definíciót szolgálhat ki). Két új config kulcs, mindkettő a korábbi viselkedést adja
+  alapértelmezésben, tehát a frissítés semmit nem mozdít el:
+
+  - `aura.cache.store` (`AURA_CACHE_STORE`) — melyik store-ba menjen. Egy saját store megnevezése
+    ráadásul megadja azt a csoportos ürítést is, amit egyik driver sem: `php artisan cache:clear aura`.
+  - `aura.cache.prefix` (`AURA_CACHE_PREFIX`, alapból `aura.table.`) — mit tesz az alapértelmezett
+    `cacheKey()` az osztálynév elé. Megemelve minden tábla bejegyzése egyszerre elvétődik, ami a
+    „ez a deploy megváltoztatta az oszlopokat” esetre az a válasz, aminek sem a tábla-osztályok
+    listájára, sem tageket támogató driverre nincs szüksége. Elvéti, nem üríti: a régi bejegyzések
+    a TTL-jük lejártáig maradnak.
+
+  A `forgetCache()` mostantól a beállított store-ból felejt — máskülönben nem dobott volna el
+  semmit, és a következő hívást a cache szolgálta volna ki, ami az a hiba, ami sikernek látszik.
+
+  **`Cache::tags()` nincs, és ez döntés.** A `file` és a `database` nem támogat tageket, egy csomag
+  pedig, ami nem választja meg a drivert, olyan csoportos ürítést kínálna, ami az egyik hoston
+  működik, a másikon némán nem csinál semmit.
+
+  **Lock és `remember()` sincs, és ez is döntés.** Egy build tiszta PHP: nyolc oszlopnál 0,14 ms,
+  negyvennél 0,49 ms (mindegyik oszlopon egy badge két feltétellel) — mérve, nem becsülve. Egy
+  hideg cache nem termel akkora csordát, amit érdemes sorba állítani; a lock miatt a többi kérés
+  egy cache-körútra várna, hogy fél ezredmásodpercnyi CPU-t nyerjen vissza. A `remember()` pedig
+  nem is oldaná meg: nincs benne lock, viszont azt adja vissza, amit nem-`null`-ként talál, tehát
+  elvenné azt a garanciát, hogy egy bejegyzés, ami nem az általunk írt tömb, újraépítést vált ki.
+
 - **A végfelhasználónak szóló üzenetek lefordíthatók (audit M4).** A csomagnak eddig nem volt
   `lang/` könyvtára, és a `src/` sehol nem hívott fordítót. A `ValidationException::withMessages()`
   üzenetei viszont **végfelhasználóhoz kerülnek** egy 422-ben — „The field “email” cannot be sorted

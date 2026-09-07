@@ -30,6 +30,13 @@ it('publishes the error table migration under its own tag', function (): void {
         ->toContain('_create_aura_errors_table.php');
 });
 
+it('leaves the definition cache where it has always been', function (): void {
+    // Both keys are new; both defaults have to be the behaviour that was there
+    // before them, or an upgrade quietly moves every warm entry.
+    expect(config('aura.cache.store'))->toBeNull()
+        ->and(config('aura.cache.prefix'))->toBe('aura.table.');
+});
+
 it('leaves the error ingest off in the packaged config', function (): void {
     expect(config('aura.errors.enabled'))->toBeFalse()
         ->and(config('aura.errors.driver'))->toBe('log');
