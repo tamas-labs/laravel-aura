@@ -1986,6 +1986,18 @@ The row keeps **two counters, and they are not the same number**:
 
 Conflating them would turn a retried batch into a spike of user-visible errors.
 
+**A whole batch costs two queries, whatever its size**: one read of the fingerprints the batch
+already has, and one `upsert` that inserts and folds in the same statement. The counters are worked
+out in PHP from that read, so nothing needs a driver-specific `GREATEST` or `receipts + 1`
+expression. The number is pinned by a test rather than described — a record-at-a-time version cost
+two queries *per entry*, which is 200 on a default-capped batch, synchronously, inside the request,
+and behind `throttle:60,1` that is 12 000 queries a minute from one IP.
+
+The read and the write are not one atomic step, which is worth knowing rather than working around:
+two requests carrying the same fingerprint at the same moment can leave `receipts` one short, and
+both may report the record as new. The row itself cannot double — the unique index is what prevents
+that, and it is what a retry relies on.
+
 Beside them the row carries what the payload does not say: `received_at`, `ip`, `user_agent`,
 `referer` and `user_id` — each an approximation, and each worth what its source is worth. The
 `user_id` is known only on a same-origin request, where the native `fetch()` sends the session

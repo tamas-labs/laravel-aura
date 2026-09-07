@@ -172,6 +172,42 @@ version is independent of the package version.
 
 ### Changed
 
+- **A `DatabaseErrorStore` egy teljes köteget két lekérdezésbe ír, 200 helyett (audit M8).**
+  `DB::listen`-nel mérve, egy alapértelmezetten maximált, 100 elemű kötegre: **200 lekérdezés**
+  hidegen és melegen egyaránt, szinkron módon a kérés alatt — a `throttle:60,1` mögött percenként
+  12 000 egy IP-ről. Most **2**, kötegmérettől függetlenül, és ezt teszt rögzíti, nem leírás.
+
+  A soronkénti `SELECT` + `INSERT`/`UPDATE` helyett egy `whereIn` beolvassa a köteg már meglévő
+  fingerprintjeit, és egy `upsert` szúrja be és vonja össze az összeset. **Az audit által jelzett
+  hordozhatósági gond nem merül fel:** a számlálók PHP-ban készülnek el abból az olvasásból, tehát
+  nincs szükség driverfüggő `GREATEST(…)` vagy `receipts + 1` kifejezésre — az utasítás értékeket
+  visz, nem kifejezéseket. Az insert/update döntést továbbra is a `fingerprint` unique indexe hozza.
+
+  Három dolog tartja egyben, és mindhárom teherviselő:
+
+  - **Egy kötegen belül ismétlődő fingerprint az írás előtt összevonódik.** Egy utasítás nem vihet
+    egy kulcsot kétszer, és a driverek nem értenek egyet arról, mi történik akkor: a PostgreSQL
+    visszautasítja az egészet, az SQLite és a MySQL viszont elfogadja, és az utolsó sor nyer.
+    SQLite-on lemérve ez némán 1-en hagyta a `receipts`-et két érkezésre, és az utolsó `count`-ot
+    vette a legmagasabb helyett — rossz számlálók, hibaüzenet nélkül.
+  - **Egy elbukott chunk soronként újra lefut** (`salvage()`), mert egy utasítás mindent-vagy-semmit,
+    és egy mérgezett rekord különben magával vinné a mellette lévő kilencvenkilencet. A `stored`
+    marad az, amit a soronkénti változat ígért — nem az egész köteg, és nem is a semmi —, a hiba
+    pedig továbbra is pontosan egyszer jelentődik.
+  - **Az olvasás és az írás nem atomi lépés**, ahogy a soronkénti változat `UPDATE`-je sem volt az:
+    ugyanaz a read-modify-write. Egy azonos fingerprintre futó verseny egy `receipts`-szel
+    kevesebbet hagyhat, és mindkét kérés újként jelentheti a bejegyzést. Maga a sor nem duplázódhat.
+
+  Két apró, szándékos következmény. A `last_occurred_at` mostantól mindig ki van töltve
+  (`lastOccurredAt() ?? occurredAt()`), mert egy sor egy értéket visz a beszúrási és a frissítési
+  ághoz is — eddig egy első beszúrásnál `NULL` maradt. És a `config/aura.php` `queue` kommentje
+  végre igazat mond: azzal indokolta a szinkron alapértéket, hogy „a munka egy írás”, ami a
+  `database` driverre eddig nem volt igaz.
+
+  Eltűnt a `write()`, a `touch()` és a `QueryException`-ös versenyág a `@phpstan-impure` jelöléssel
+  együtt — a versenyt most az adatbázis unique indexe kezeli, egyetlen utasításban. Mindkettő
+  `private` volt, a `DatabaseErrorStore` publikus felülete változatlan.
+
 - **A `Column` formázó- és tipográfia-setterei szándékosan ismétlik a cellakonfigurációk
   trait-jeit (audit M6).** Tizenöt név szerepel mindkét helyen ugyanazzal az egysoros törzzsel, és
   ez eddig véletlennek látszott. A `Cell\Concerns\HasFormatting` / `HasTypography` / `HasElement`

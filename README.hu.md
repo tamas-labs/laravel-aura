@@ -2009,6 +2009,19 @@ A sor **két számlálót** tart, és **ez a kettő nem ugyanaz a szám**:
 
 A kettő összemosása egy újraküldött köteget a felhasználó által látott hibák kiugrásává tenne.
 
+**Egy teljes köteg két lekérdezésbe kerül, a méretétől függetlenül**: egy olvasás azokra a
+fingerprintekre, amik már megvannak, és egy `upsert`, ami ugyanabban az utasításban szúr be és von
+össze. A számlálók PHP-ban készen állnak abból az olvasásból, tehát semmihez nem kell
+driverfüggő `GREATEST` vagy `receipts + 1` kifejezés. A számot nem leírás rögzíti, hanem teszt — a
+soronkénti változat bejegyzésenként két lekérdezésbe került, ami egy alapértelmezetten maximált
+kötegen 200, szinkron módon, a kérés alatt, a `throttle:60,1` mögött pedig percenként 12 000
+lekérdezés egy IP-ről.
+
+Az olvasás és az írás nem egyetlen atomi lépés, és ezt inkább tudni érdemes, mint megkerülni: két
+kérés, ami ugyanazt a fingerprintet hozza ugyanabban a pillanatban, egy `receipts`-szel kevesebbet
+hagyhat maga után, és mindkettő újként jelentheti a bejegyzést. Maga a sor nem duplázódhat — ezt a
+unique index akadályozza meg, és erre támaszkodik az újraküldés is.
+
 Mellettük a sor azt viszi, amit a payload nem mond ki: `received_at`, `ip`, `user_agent`, `referer`
 és `user_id` — mindegyik közelítés, és mindegyik annyit ér, amennyit a forrása. A `user_id` csak
 azonos originű kérésnél ismert, ahol a natív `fetch()` elküldi a session cookie-t.

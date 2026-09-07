@@ -214,9 +214,12 @@ return [
             'max_bytes' => 8192,
         ],
 
-        // Whether storing is pushed onto the queue. Synchronous by default: the
-        // work is one write, and a queue that is not running would turn a
-        // report into a silently pending job.
+        // Whether storing is pushed onto the queue. Synchronous by default,
+        // and now honestly so: the `database` driver writes a whole batch in
+        // two queries whatever its size — one read of the fingerprints it
+        // already has, one `upsert` — so there is little to move off the
+        // request, while a queue that is not running would turn a report into a
+        // silently pending job.
         'queue' => false,
     ],
 

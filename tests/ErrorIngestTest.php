@@ -285,6 +285,64 @@ it('reports only the first delivery as stored', function (): void {
     auraPostErrors([auraErrorEntry()])->assertJson(['stored' => 0, 'received' => 1]);
 });
 
+it('writes a whole batch in two queries', function (): void {
+    // The record-at-a-time version cost two queries per entry — a SELECT and
+    // then an INSERT or an UPDATE — which is 200 on a default-capped batch,
+    // synchronously, inside the request; behind `throttle:60,1` that is 12 000
+    // queries a minute from one IP. The count has to stay independent of the
+    // batch size, so it is pinned rather than described.
+    auraEnableIngest(['driver' => 'database']);
+    auraErrorsTable();
+
+    $entries = [];
+
+    for ($i = 0; $i < 100; $i++) {
+        $entries[] = auraErrorEntry(['message' => "Error number {$i}"]);
+    }
+
+    $queries = 0;
+    DB::listen(function () use (&$queries): void {
+        $queries++;
+    });
+
+    auraPostErrors($entries)->assertJson(['stored' => 100]);
+
+    expect($queries)->toBe(2);
+
+    // The repeat is the ordinary case, not the edge one — Aura re-sends a batch
+    // after any non-2xx answer — so it must not degrade to a query per row.
+    $queries = 0;
+
+    auraPostErrors($entries)->assertJson(['stored' => 0]);
+
+    expect($queries)->toBe(2)
+        ->and(DB::table('aura_errors')->count())->toBe(100);
+});
+
+it('folds a fingerprint repeated inside one batch', function (): void {
+    // One statement must not carry one key twice, and the drivers disagree
+    // about what happens when it does: PostgreSQL refuses the whole `ON
+    // CONFLICT` statement, while SQLite and MySQL accept it and let the last row
+    // win — silently wrong counters rather than an error. The fold therefore
+    // happens before the write, the same way on every driver.
+    auraEnableIngest(['driver' => 'database']);
+    auraErrorsTable();
+
+    // `count` is not part of the fingerprint, so these are one error.
+    auraPostErrors([
+        auraErrorEntry(['count' => 2]),
+        auraErrorEntry(['count' => 5]),
+    ])->assertJson(['received' => 2, 'stored' => 1]);
+
+    $row = auraErrorRow();
+
+    expect(DB::table('aura_errors')->count())->toBe(1)
+        // Two arrivals: the server's number.
+        ->and(auraNumber($row->receipts))->toBe(2)
+        // The client's number, and the higher of the two — never the sum.
+        ->and(auraNumber($row->occurrences))->toBe(5);
+});
+
 it('keeps two errors a millisecond apart apart', function (): void {
     auraEnableIngest(['driver' => 'database']);
     auraErrorsTable();
@@ -525,11 +583,12 @@ it('answers 202 when the queue it dispatches to is unreachable', function (): vo
 });
 
 it('keeps what landed when a write fails part-way through a batch', function (): void {
-    // The insert fails for a reason that is not the deduplication race, so
-    // there is no row to fold into: write() re-raises it rather than dropping
-    // the record silently, store() reports it once and gives up on the rest,
-    // and `stored` is the number that actually landed — not the whole batch,
-    // and not none of it.
+    // The write is a batched `upsert`, which is one all-or-nothing statement, so
+    // one poison record would otherwise cost the ninety-nine beside it. The
+    // failed chunk is reported once and then walked a row at a time: `stored` is
+    // the number that actually landed — not the whole batch, and not none of it
+    // — and the pass stops at the offending row rather than repeating one
+    // storage fault once per record.
     Exceptions::fake();
 
     auraEnableIngest(['driver' => 'database']);
