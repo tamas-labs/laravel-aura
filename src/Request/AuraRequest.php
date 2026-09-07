@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use TamasLabs\Aura\Query\FieldPermissions;
+use TamasLabs\Aura\Support\Messages;
 
 /**
  * One parsed, validated Aura request.
@@ -213,7 +214,10 @@ final readonly class AuraRequest
     {
         $scalarId = static function (string $attribute, mixed $value, Closure $fail): void {
             if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
-                $fail('The :attribute must be a string or a number.');
+                // Resolved inside the closure, not beside it: the line is only
+                // needed when the rule fails, and these two closures are built
+                // on every request.
+                $fail(Messages::get('validation.scalar_id'));
             }
         };
 
@@ -224,7 +228,7 @@ final readonly class AuraRequest
         // it with an `orWhereNull`.
         $scalarValue = static function (string $attribute, mixed $value, Closure $fail): void {
             if ($value !== null && ! is_scalar($value)) {
-                $fail('The :attribute must be a string, a number or a boolean.');
+                $fail(Messages::get('validation.scalar_value'));
             }
         };
 
@@ -286,11 +290,10 @@ final readonly class AuraRequest
         }
 
         throw ValidationException::withMessages([
-            $context => sprintf(
-                'The %s carries properties the Aura contract does not define: %s.',
-                $context,
-                implode(', ', array_map(strval(...), $unknown)),
-            ),
+            $context => Messages::get('validation.unknown_properties', [
+                'section' => $context,
+                'properties' => implode(', ', array_map(strval(...), $unknown)),
+            ]),
         ]);
     }
 
@@ -333,7 +336,7 @@ final readonly class AuraRequest
         foreach ($rows as $row) {
             $field = self::field($row);
 
-            self::guard($fields->allowsSort($field), $field, 'sorted by');
+            self::guard($fields->allowsSort($field), $field, 'validation.not_sortable');
             self::guardUnique($seen, $field, 'sortable');
             $seen[$field] = true;
 
@@ -358,7 +361,7 @@ final readonly class AuraRequest
         foreach ($rows as $row) {
             $field = self::field($row);
 
-            self::guard($fields->allowsSearch($field), $field, 'searched');
+            self::guard($fields->allowsSearch($field), $field, 'validation.not_searchable');
             self::guardUnique($seen, $field, 'searchable');
             $seen[$field] = true;
 
@@ -390,7 +393,7 @@ final readonly class AuraRequest
         foreach ($rows as $row) {
             $field = self::field($row);
 
-            self::guard($fields->allowsFilter($field), $field, 'filtered by');
+            self::guard($fields->allowsFilter($field), $field, 'validation.not_filterable');
             self::guardUnique($seen, $field, 'filterable');
             $seen[$field] = true;
 
@@ -452,16 +455,22 @@ final readonly class AuraRequest
      * The message names the rejected field but never lists the permitted ones —
      * an error response is not a place to enumerate the schema.
      *
+     * One key per operation rather than an operation interpolated into a shared
+     * sentence: "sorted by" reads as a phrase only in English, and a translator
+     * handed the fragment could not place it.
+     *
+     * @param  string  $message  A key under {@see Messages}, group included.
+     *
      * @throws ValidationException
      */
-    private static function guard(bool $allowed, string $field, string $operation): void
+    private static function guard(bool $allowed, string $field, string $message): void
     {
         if ($allowed) {
             return;
         }
 
         throw ValidationException::withMessages([
-            'field' => sprintf('The field "%s" cannot be %s.', $field, $operation),
+            'field' => Messages::get($message, ['field' => $field]),
         ]);
     }
 
@@ -531,14 +540,11 @@ final readonly class AuraRequest
 
             if ($count > $ceiling) {
                 throw ValidationException::withMessages([
-                    $key => sprintf(
-                        'The %s list carries %d entries; this table offers %d %s field(s), '
-                        .'and Aura sends at most one entry per field.',
-                        $key,
-                        $count,
-                        $ceiling,
-                        $key,
-                    ),
+                    $key => Messages::get('validation.list_too_long', [
+                        'list' => $key,
+                        'count' => $count,
+                        'offered' => $ceiling,
+                    ]),
                 ]);
             }
         }
@@ -547,12 +553,10 @@ final readonly class AuraRequest
 
         if ($selected > $limits->selected) {
             throw ValidationException::withMessages([
-                'selected' => sprintf(
-                    'The selection carries %d ids; this endpoint accepts %d. '
-                    .'Raise aura.limits.selected if that is genuinely too few.',
-                    $selected,
-                    $limits->selected,
-                ),
+                'selected' => Messages::get('validation.selection_too_long', [
+                    'count' => $selected,
+                    'max' => $limits->selected,
+                ]),
             ]);
         }
     }
@@ -590,11 +594,10 @@ final readonly class AuraRequest
         }
 
         throw ValidationException::withMessages([
-            $key => sprintf(
-                'The %s list names the field "%s" more than once; Aura sends at most one entry per field.',
-                $key,
-                $field,
-            ),
+            $key => Messages::get('validation.duplicate_field', [
+                'list' => $key,
+                'field' => $field,
+            ]),
         ]);
     }
 }

@@ -8,6 +8,34 @@ version is independent of the package version.
 
 ### Added
 
+- **A végfelhasználónak szóló üzenetek lefordíthatók (audit M4).** A csomagnak eddig nem volt
+  `lang/` könyvtára, és a `src/` sehol nem hívott fordítót. A `ValidationException::withMessages()`
+  üzenetei viszont **végfelhasználóhoz kerülnek** egy 422-ben — „The field “email” cannot be sorted
+  by.”, „The selection carries 500 ids; this endpoint accepts 100.” —, keményen angolul, egy magyar
+  admin felület kellős közepén.
+
+  Mostantól a csomag két locale-t szállít (`lang/en`, `lang/hu`), amik publikálás nélkül is
+  feloldódnak, és az alkalmazás locale-ja dönt köztük. Egy sor felülírása vagy egy új nyelv
+  hozzáadása: `php artisan vendor:publish --tag=aura-lang`, majd
+  `lang/vendor/aura/<locale>/validation.php`.
+
+  **Csak az megy át a fordítón, amit a végfelhasználó lát.** Az `InvalidDefinition`, az
+  `UnsupportedRelation` és az `UnsupportedPaginator` a definícióban lévő hibát nevezi meg, stack
+  trace-ben vagy logban olvassuk, és pont azért kereshető, mert nem változik a locale-lal — ezek
+  angolul maradnak, és egy teszt rögzíti, hogy egyikük sem nyúl a fordítóhoz. Ugyanígy angol marad
+  az, amit egy hibaköteg az eldobott bejegyzéseiről válaszol: azt a böngésző konzoljában olvassa egy
+  fejlesztő.
+
+  Műveletenként külön kulcs (`not_sortable` / `not_searchable` / `not_filterable`), nem pedig egy
+  közös mondatba interpolált művelet: a „sorted by” csak angolul olvasható kifejezésként, és a
+  töredéket megkapó fordító nem tudná hová tenni.
+
+  Új `@internal` osztály: `TamasLabs\Aura\Support\Messages` — egyetlen seam, ami a `Lang`
+  facade-ot használja, mert a `trans()` és a `__()` az `Illuminate\Foundation` helperei, az pedig
+  nincs a csomag granuláris `illuminate/*` függőségei között. Egy sor, ami nem string (egy publikált
+  fájlban felejtett `return []`), a kulcsra degradálódik, nem 500-ra. A `composer.json` mostantól
+  explicit `illuminate/translation` függőséget deklarál; a publikus PHP-felület nem változik.
+
 - **Pontozott oszlop eager load nélkül: figyelmeztetés a némaság helyett (audit M3).** A
   `Column::make('company.name')` egy `query(): User::query()` mellett — `->with('company')` nélkül —
   üres oszlopot renderelt, és semmi nem szólt. Még N+1 sem keletkezett, amin fel lehetne figyelni: a

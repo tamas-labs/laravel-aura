@@ -55,6 +55,8 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [AuraQuery](#auraquery)
   - [AuraPayload](#aurapayload)
 - [Kivételek](#kivételek)
+- [Üzenetek és fordítások](#üzenetek-és-fordítások)
+  - [Egy sor felülírása](#egy-sor-felülírása)
 - [Hibajelentés fogadása](#hibajelentés-fogadása)
   - [Bekapcsolás](#bekapcsolás)
   - [Ki POST-olhat rá](#ki-post-olhat-rá)
@@ -1690,6 +1692,52 @@ Minden kivétel, amit ez a csomag a saját nevében dob, implementálja a
 
 Mindegyik a **tábla definíciójában** lévő hibát jelent, nem a kliens inputjában lévőt — a hibás
 input jóval előbb elbukik a validáción, és 422 lesz belőle.
+
+---
+
+## Üzenetek és fordítások
+
+A csomag kétféle dolgot mond, és csak az egyiket fordítjuk le.
+
+**Amit a végfelhasználó lát, azt fordítjuk.** A csomagolt `lang/` könyvtár sorai azoknak a
+422-eknek a törzsei, amiket egy hétköznapi kattintás is elő tud idézni — rendezés olyan mezőre,
+amit a tábla nem kínál, vagy a végpontnál nagyobb kijelölés. Az `en` és a `hu` a csomaggal
+érkezik, és publikálás nélkül is feloldódik; hogy melyik kell, azt az alkalmazás locale-ja dönti
+el.
+
+**Ami annak szól, aki a táblát írta, az angol marad.** Az `InvalidDefinition`, az
+`UnsupportedRelation` és az `UnsupportedPaginator` a definícióban lévő hibát nevezi meg,
+stack trace-ben vagy logban olvassuk, és pont azért kereshető, mert nem változik a locale-lal.
+Ugyanez igaz arra is, amit egy hibakötegre válaszolunk az eldobott bejegyzésekről: azt a
+böngésző konzoljában olvassa egy fejlesztő.
+
+A Laravel saját szabály-üzeneteit (`required`, `integer`, `in`) nem ennek a csomagnak kell
+lefordítania — a framework `validation.php`-jából jönnek, és már le vannak fordítva.
+
+### Egy sor felülírása
+
+```bash
+php artisan vendor:publish --tag=aura-lang
+```
+
+Ez kiírja a `lang/vendor/aura/{en,hu}/validation.php` fájlokat, és a publikált sor nyer a
+csomagolttal szemben. Olyan locale-hoz sem kell semmit regisztrálni, amit a csomag nem szállít:
+hozd létre a `lang/vendor/aura/de/validation.php`-t ugyanazokkal a kulcsokkal.
+
+| Kulcs | Placeholderek | Mikor küldjük |
+| --- | --- | --- |
+| `unknown_properties` | `:section`, `:properties` | a payload olyan tulajdonságot hordoz, amit a kérés-kontraktus nem definiál |
+| `not_sortable` | `:field` | a mező nincs a rendezési whitelistben |
+| `not_searchable` | `:field` | a mező nincs a keresési whitelistben |
+| `not_filterable` | `:field` | a mező nincs a szűrési whitelistben |
+| `list_too_long` | `:list`, `:count`, `:offered` | több elem, mint amennyi mezőt a tábla arra a műveletre kínál |
+| `selection_too_long` | `:count`, `:max` | a `selected[]` hosszabb, mint az `aura.limits.selected` |
+| `duplicate_field` | `:list`, `:field` | egy lista kétszer nevezi meg ugyanazt a mezőt |
+| `scalar_id` | `:attribute` | olyan `min` / `max` határ, ami nem szöveg és nem szám |
+| `scalar_value` | `:attribute` | olyan szűrőérték, ami nem skalár |
+
+Műveletenként külön kulcs, nem pedig egy közös mondatba interpolált művelet: a „sorted by” csak
+angolul olvasható kifejezésként, és a töredéket megkapó fordító nem tudná hová tenni.
 
 ---
 

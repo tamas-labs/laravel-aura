@@ -54,6 +54,8 @@ fields the query will accept come out of the same definition, so they cannot dri
   - [AuraQuery](#auraquery)
   - [AuraPayload](#aurapayload)
 - [Exceptions](#exceptions)
+- [Messages and translations](#messages-and-translations)
+  - [Overriding a line](#overriding-a-line)
 - [Error reporting](#error-reporting)
   - [Switching it on](#switching-it-on)
   - [Who can post to it](#who-can-post-to-it)
@@ -1671,6 +1673,51 @@ Every exception this package raises on its own behalf implements
 
 These all report a mistake in the **table definition**, never in the client's input — malformed
 input fails validation and becomes a 422 long before it reaches them.
+
+---
+
+## Messages and translations
+
+The package says two kinds of thing, and only one of them is translated.
+
+**What reaches an end user is translated.** The lines in the packaged `lang/` directory are the
+bodies of the 422s an ordinary click can produce — a sort on a field the table does not offer, a
+selection larger than the endpoint accepts. `en` and `hu` ship with the package and resolve out
+of the box; the application's locale decides which is used.
+
+**What reaches whoever wrote the table stays in English.** `InvalidDefinition`,
+`UnsupportedRelation` and `UnsupportedPaginator` name a mistake in the definition, are read in a
+stack trace or a log, and are searchable precisely because they do not change with the locale.
+The same holds for the reasons an error batch gives for a dropped entry: those are read in the
+browser console, by a developer.
+
+Laravel's own rule messages (`required`, `integer`, `in`) are not this package's to translate —
+they come from the framework's `validation.php` and are localised already.
+
+### Overriding a line
+
+```bash
+php artisan vendor:publish --tag=aura-lang
+```
+
+That writes `lang/vendor/aura/{en,hu}/validation.php`, and a published line wins over the
+packaged one. A locale the package does not ship needs no registration either: create
+`lang/vendor/aura/de/validation.php` with the same keys.
+
+| Key | Placeholders | Sent when |
+| --- | --- | --- |
+| `unknown_properties` | `:section`, `:properties` | the payload carries a property the request contract does not define |
+| `not_sortable` | `:field` | the field is not on the sort whitelist |
+| `not_searchable` | `:field` | the field is not on the search whitelist |
+| `not_filterable` | `:field` | the field is not on the filter whitelist |
+| `list_too_long` | `:list`, `:count`, `:offered` | more entries than the table has fields for that operation |
+| `selection_too_long` | `:count`, `:max` | `selected[]` is longer than `aura.limits.selected` |
+| `duplicate_field` | `:list`, `:field` | one list names the same field twice |
+| `scalar_id` | `:attribute` | a `min` / `max` bound that is not a string or a number |
+| `scalar_value` | `:attribute` | a filter value that is not a scalar |
+
+One key per operation rather than an operation interpolated into a shared sentence: "sorted by"
+reads as a phrase only in English, and a translator handed the fragment could not place it.
 
 ---
 

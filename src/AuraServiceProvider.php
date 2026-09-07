@@ -11,6 +11,7 @@ use TamasLabs\Aura\Errors\DatabaseErrorStore;
 use TamasLabs\Aura\Errors\ErrorIngestConfig;
 use TamasLabs\Aura\Errors\ErrorStore;
 use TamasLabs\Aura\Errors\LogErrorStore;
+use TamasLabs\Aura\Support\Messages;
 
 /**
  * Registers the package's configuration, its Artisan commands and — only when
@@ -36,14 +37,19 @@ final class AuraServiceProvider extends ServiceProvider
     }
 
     /**
-     * Expose the config file and the error table's migration to
-     * `php artisan vendor:publish`, register the Artisan commands, and load the
-     * ingest route when it is switched on.
+     * Expose the config file, the translations and the error table's migration
+     * to `php artisan vendor:publish`, register the Artisan commands, and load
+     * the ingest route when it is switched on.
      *
      * @internal
      */
     public function boot(): void
     {
+        // Loaded, not published: the messages have to resolve out of the box,
+        // and publishing them is how a host *overrides* one, not how it gets
+        // them at all.
+        $this->loadTranslationsFrom($this->langPath(), Messages::NAMESPACE);
+
         if (ErrorIngestConfig::fromConfig()->enabled) {
             $this->loadRoutesFrom(__DIR__.'/../routes/aura-errors.php');
         }
@@ -52,6 +58,10 @@ final class AuraServiceProvider extends ServiceProvider
             $this->publishes([
                 $this->configPath() => $this->app->configPath('aura.php'),
             ], 'aura-config');
+
+            $this->publishes([
+                $this->langPath() => $this->app->langPath('vendor/'.Messages::NAMESPACE),
+            ], 'aura-lang');
 
             $this->publishes([
                 __DIR__.'/../database/migrations/create_aura_errors_table.php.stub' => $this->migrationPath(),
@@ -67,6 +77,14 @@ final class AuraServiceProvider extends ServiceProvider
     private function configPath(): string
     {
         return __DIR__.'/../config/aura.php';
+    }
+
+    /**
+     * Absolute path of the packaged translations.
+     */
+    private function langPath(): string
+    {
+        return __DIR__.'/../lang';
     }
 
     /**
