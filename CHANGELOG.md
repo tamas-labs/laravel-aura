@@ -190,7 +190,14 @@ version is independent of the package version.
     `max`-ja a mátrix legújabb verziója.
   - **A `tamas-labs/aura-schema`-nak is `^8.2` kell**, különben a 8.2-es ág nem települ: a
     dev-függőség maga is `^8.3`-at kért, ugyanazért a két típusos konstansért. Ott ugyanez a
-    változás készült el; a 8.2-es CI-ág attól a kiadástól zöld, ami ezt tartalmazza.
+    változás készült el, és a `v1.1.0` tagben jelent meg.
+  - **A `tamas-labs/aura-schema` megkötése `^1.0` helyett `^1.1`.** A `^1.0` a `v1.0.0`-t is
+    megengedte, pedig azzal a suite nem megy át: nincs benne a hibajelentés-dokumentum és a
+    példája (a `ContractSchemaTest` három és az `ErrorIngestTest` egy tesztje `RuntimeException`-nel
+    bukott), a 8.2-es ág pedig nem is települt, mert a `v1.0.0` még `^8.3`-at kér. A CI éppen így
+    futott le: a PHP 8.2-es commit a sémacsomag `v1.1.0` tagje előtt ment fel, tehát hét ág a
+    `v1.0.0`-t kapta. Helyben mindez nem látszott, mert a `vendor/`-ben kiadatlan sémafájlok ültek
+    `v1.0.0` címke alatt. Az alsó korlát most az a legrégebbi kiadás, amivel a suite tényleg zöld.
 
 - **Az audit alacsony prioritású listája végigvéve (A1–A7).** Hét megállapítás, egy menetben; kettő
   közülük nem változtatás lett, hanem kimondott döntés.

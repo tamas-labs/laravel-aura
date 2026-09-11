@@ -2197,7 +2197,8 @@ szándékosan nincs.
 ### A tag előtt
 
 - **A szerződés rögzítve van.** A `tamas-labs/aura-schema` `dev-main`-en jött, amíg 2026-09-02-án
-  meg nem született rá a `v1.0.0` tag; a megkötés azóta `^1.0`. Azért számított, mert a
+  meg nem született rá a `v1.0.0` tag; a megkötés ma `^1.1`, az első kiadás, amelyben benne van a
+  hibajelentés-dokumentum, és amely PHP 8.2-t is enged. Azért számított, mert a
   `composer.lock` nincs commitolva (ez a könyvtár-konvenció), tehát semmi nem rögzítette a felsőbb
   revíziót: egy séma-változás úgy tudta pirosra fordítani az itteni CI-t, hogy ebben a repóban
   egyetlen commit sem történt, egy régi CI-futás pedig nem volt újrajátszható. Egy VCS repository a

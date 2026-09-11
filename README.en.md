@@ -2168,7 +2168,8 @@ and no field in the payload.
 ### Before the tag
 
 - **The contract is pinned.** `tamas-labs/aura-schema` was pulled at `dev-main` until it was tagged
-  `v1.0.0` on 2026-09-02; the constraint is `^1.0` now. That mattered because `composer.lock` is not
+  `v1.0.0` on 2026-09-02; the constraint is `^1.1` now, the first release that carries the error
+  report document and allows PHP 8.2. That mattered because `composer.lock` is not
   committed (the library convention), so nothing fixed the upstream revision: a schema change could
   turn CI here red with no commit in this repository, and an old CI run could not be replayed. A VCS
   repository resolves git tags into semver versions with no registry involved, which is all it took.
