@@ -38,16 +38,16 @@ use Illuminate\Validation\Rule;
 final readonly class ErrorBatch
 {
     /** Severities the contract allows. */
-    public const array SEVERITIES = ['critical', 'error', 'warning', 'info', 'debug'];
+    public const SEVERITIES = ['critical', 'error', 'warning', 'info', 'debug'];
 
     /** Error types the contract allows. */
-    public const array TYPES = [
+    public const TYPES = [
         'validation', 'network', 'authentication', 'authorization',
         'not_found', 'server', 'client', 'api', 'unknown',
     ];
 
     /** Rejection reasons kept for the response body; the rest are counted only. */
-    private const int MAX_REASONS = 10;
+    private const MAX_REASONS = 10;
 
     /**
      * @param  list<AuraErrorRecord>  $records  Entries that will be stored.

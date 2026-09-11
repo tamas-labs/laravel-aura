@@ -118,8 +118,9 @@ The package is **not released**: no tag, not on Packagist. Install it from the r
 
 ## Requirements
 
-- **PHP** `^8.3` — the CI matrix runs 8.3, 8.4, 8.5
-- **Laravel** `^12.0 || ^13.0` — written as `illuminate/*` components, satisfied by `laravel/framework`
+- **PHP** `^8.2` — the CI matrix runs 8.2, 8.3, 8.4, 8.5
+- **Laravel** `^12.0 || ^13.0` — written as `illuminate/*` components, satisfied by `laravel/framework`;
+  Laravel 13 itself requires PHP 8.3, so on PHP 8.2 the package runs, and is tested, on Laravel 12 only
 - A database driver Eloquent supports; the test suite runs on SQLite, and the `LIKE` escaping is
   written to behave identically on MySQL/MariaDB, PostgreSQL and SQLite
 - On the browser side, an Aura that reads **contract 1.0** — see [Versioning](#versioning), which is
@@ -2236,8 +2237,18 @@ One service, `php`, on `php:8.4-cli-alpine`. **No database container** — the s
 in-memory SQLite, so `docker compose up` is never needed.
 
 The quality gate is Laravel Pint (`laravel` preset), PHPStan/Larastan at level **max** over `src/`,
-`tests/` and `workbench/`, and Pest. CI runs the matrix natively (PHP 8.3/8.4/8.5 × Laravel 12/13) and
-separately builds this image so the Dockerfile cannot rot.
+`tests/` and `workbench/`, and Pest. CI runs the matrix natively (PHP 8.2/8.3/8.4/8.5 × Laravel 12/13,
+with 8.2 on Laravel 12 alone, since Laravel 13 requires 8.3) and separately builds this image so the
+Dockerfile cannot rot.
+
+**The image is PHP 8.4, the floor is 8.2**, so the local gate cannot run the floor — but it does
+analyse against it. `phpstan.neon` sets `phpVersion` to the range the package supports, which makes
+8.3-only *syntax* an error on 8.4 too: a native-typed class constant (`const string X`) or a dynamic
+class constant fetch (`Foo::{$name}`) is a parse error on 8.2, and PHPStan reports it as a
+non-ignorable error rather than leaving it to the 8.2 CI leg. The newer *functions* are not the risk:
+Laravel requires `symfony/polyfill-php83` and later, so `json_validate()` exists on 8.2 as well.
+`tests/VersioningTest.php` pins the range to the floor in `composer.json` and to the newest version
+the matrix runs.
 
 **Coverage has a floor, and the floor is the gate.** `composer test:coverage` runs the suite with
 `--min=90`, which fails the run below that number rather than printing a report nobody reads. The
@@ -2270,7 +2281,7 @@ line this section draws, arrived at independently. CI runs it as its own job on 
 request, from the first tag onwards.
 
 The checker is **not** a dependency of this package and must not become one: it requires PHP
-`~8.4.0 || ~8.5.0` against a `^8.3` floor here, and its Composer and Symfony constraints have every
+`~8.4.0 || ~8.5.0` against a `^8.2` floor here, and its Composer and Symfony constraints have every
 chance of colliding with Laravel's. `composer bc-check` installs it into `build/bc-check`, on its
 own, where none of that meets anything. Two things are worth knowing before the first run: it
 compares *committed* revisions — it clones the repository into a temporary directory, so

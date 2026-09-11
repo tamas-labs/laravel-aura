@@ -20,5 +20,5 @@ final class AuraContract
     /**
      * Version of the Aura JSON contract this package targets.
      */
-    public const string VERSION = '1.0';
+    public const VERSION = '1.0';
 }

@@ -119,8 +119,9 @@ A csomag **nincs kiadva**: nincs tag, nincs fenn Packagiston. A repóból telep�
 
 ## Követelmények
 
-- **PHP** `^8.3` — a CI-mátrix ezeket futtatja: 8.3, 8.4, 8.5
-- **Laravel** `^12.0 || ^13.0` — `illuminate/*` komponensekként megfogalmazva, `laravel/framework`-kel kielégítve
+- **PHP** `^8.2` — a CI-mátrix ezeket futtatja: 8.2, 8.3, 8.4, 8.5
+- **Laravel** `^12.0 || ^13.0` — `illuminate/*` komponensekként megfogalmazva, `laravel/framework`-kel kielégítve;
+  a Laravel 13 maga PHP 8.3-at kér, így PHP 8.2-n a csomag csak Laravel 12-vel fut, és csak azzal is van tesztelve
 - Bármilyen Eloquent által támogatott adatbázis-driver; a teszt-suite SQLite-on fut, a `LIKE`
   escape-elés pedig úgy van megírva, hogy MySQL/MariaDB-n, PostgreSQL-en és SQLite-on egyformán
   viselkedjen
@@ -2267,7 +2268,17 @@ in-memory SQLite-on fut, így a `docker compose up`-ra soha nincs szükség.
 
 A minőségi kapu: Laravel Pint (`laravel` preset), PHPStan/Larastan **max** szinten a `src/`, a
 `tests/` és a `workbench/` felett, valamint Pest. A CI a mátrixot natívan futtatja
-(PHP 8.3/8.4/8.5 × Laravel 12/13), és külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
+(PHP 8.2/8.3/8.4/8.5 × Laravel 12/13, a 8.2 csak Laravel 12-vel, mert a Laravel 13 8.3-at kér), és
+külön építi ezt az image-et, hogy a Dockerfile ne rothadjon el.
+
+**Az image PHP 8.4, a küszöb 8.2**, így a helyi kapu a küszöbön nem tud futni — elemezni viszont
+ellene elemez. A `phpstan.neon` a `phpVersion`-t a csomag által támogatott tartományra állítja,
+ettől a csak 8.3-tól létező *szintaxis* 8.4-en is hiba: egy natív típusú osztálykonstans
+(`const string X`) vagy egy dinamikus nevű konstans-lekérés (`Foo::{$name}`) 8.2-n parse error, és
+a PHPStan nem ignorálható hibaként jelenti, ahelyett hogy a 8.2-es CI-ágra hagyná. Az újabb
+*függvények* nem jelentenek kockázatot: a Laravel megköveteli a `symfony/polyfill-php83`-at és a
+későbbieket, így a `json_validate()` 8.2-n is létezik. A `tests/VersioningTest.php` a tartományt a
+`composer.json` küszöbéhez és a mátrix legújabb verziójához köti.
 
 **A lefedettségnek van alsó küszöbe, és a küszöb maga a kapu.** A `composer test:coverage` a
 suite-ot `--min=90`-nel futtatja, ami a szám alatt elbukik, nem pedig kiír egy riportot, amit senki
@@ -2303,7 +2314,7 @@ egymástól függetlenül. A CI külön jobként futtatja minden push-ra és pul
 kezdve.
 
 Az ellenőrző **nem** függősége ennek a csomagnak, és nem is válhat azzá: PHP `~8.4.0 || ~8.5.0`-t
-kér az itteni `^8.3` küszöb mellett, a Composer- és Symfony-megkötései pedig minden eséllyel
+kér az itteni `^8.2` küszöb mellett, a Composer- és Symfony-megkötései pedig minden eséllyel
 ütköznek a Laravelével. A `composer bc-check` a `build/bc-check`-be telepíti, külön, ahol ezek
 közül semmi nem találkozik semmivel. Az első futás előtt két dolgot érdemes tudni: **commitolt**
 revíziókat hasonlít össze — a repót egy ideiglenes könyvtárba klónozza, tehát a nem commitolt munka

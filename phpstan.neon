@@ -3,6 +3,15 @@ includes:
 
 parameters:
     level: max
+    # The PHP versions the package supports, not the one PHPStan happens to run
+    # on. Left unset, the range is the runtime's — 8.4 in the development image
+    # — and a native-typed class constant, which is a parse error on 8.2, passes
+    # analysis without a word; only the 8.2 CI leg would find it. `min` is the
+    # floor in composer.json and `max` the newest version the CI matrix runs;
+    # `VersioningTest` fails if either drifts.
+    phpVersion:
+        min: 80200
+        max: 80599
     paths:
         - src
         - tests

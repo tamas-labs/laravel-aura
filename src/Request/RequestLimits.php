@@ -30,16 +30,16 @@ namespace TamasLabs\Aura\Request;
 final readonly class RequestLimits
 {
     /** Items per page. Clamped rather than rejected — see {@see AuraRequest}. */
-    public const int PAGINATE = 100;
+    public const PAGINATE = 100;
 
     /** Ids in `selected`. The one list the client can grow without bound. */
-    public const int SELECTED = 1000;
+    public const SELECTED = 1000;
 
     /** Values in one `filterable[].values`. */
-    public const int VALUES = 200;
+    public const VALUES = 200;
 
     /** Characters in `globalSearch` and in a `searchable[].term`. */
-    public const int TERM = 255;
+    public const TERM = 255;
 
     public int $paginate;
 

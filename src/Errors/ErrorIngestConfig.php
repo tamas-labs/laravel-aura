@@ -34,22 +34,22 @@ namespace TamasLabs\Aura\Errors;
 final readonly class ErrorIngestConfig
 {
     /** Path the ingest route is registered at. */
-    public const string PATH = 'aura/errors';
+    public const PATH = 'aura/errors';
 
     /** Middleware the route runs behind. Never `web` — see {@see self::$middleware}. */
-    public const array MIDDLEWARE = ['throttle:60,1'];
+    public const MIDDLEWARE = ['throttle:60,1'];
 
     /** Bytes of request body accepted; over this the answer is 413. */
-    public const int MAX_PAYLOAD = 1048576;
+    public const MAX_PAYLOAD = 1048576;
 
     /** Entries kept from one batch. The client's own queue caps at 100. */
-    public const int MAX_ENTRIES = 100;
+    public const MAX_ENTRIES = 100;
 
     /** Bytes of encoded `metadata` kept per entry. */
-    public const int METADATA_MAX_BYTES = 8192;
+    public const METADATA_MAX_BYTES = 8192;
 
     /** Table the `database` driver writes to. */
-    public const string TABLE = 'aura_errors';
+    public const TABLE = 'aura_errors';
 
     /**
      * @param  bool  $enabled  Whether the route is registered at all.

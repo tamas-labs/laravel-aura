@@ -33,10 +33,10 @@ use Illuminate\Support\Carbon;
 final readonly class AuraErrorRecord
 {
     /** Characters kept in a name-like field (`component`, `action`, `key`). */
-    public const int MAX_NAME = 255;
+    public const MAX_NAME = 255;
 
     /** Characters kept in a prose field (`message`, `details`). */
-    public const int MAX_TEXT = 2000;
+    public const MAX_TEXT = 2000;
 
     /**
      * @param  string  $severity  `critical` | `error` | `warning` | `info` | `debug`.

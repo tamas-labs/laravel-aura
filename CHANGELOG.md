@@ -172,6 +172,26 @@ version is independent of the package version.
 
 ### Changed
 
+- **A csomag PHP 8.2-n is fut: a követelmény `^8.3` helyett `^8.2`.** A Laravel 12 PHP 8.2-t kér,
+  a csomag mégis 8.3-at követelt — egyetlen 8.3-as nyelvi elem miatt: a 23 natív típusú
+  osztálykonstans (`public const string VERSION`, `private const array PREFIXES`, …) 8.2-n parse
+  error. A típus lekerült, az érték maradt, tehát semmi nem változik, amit egy hívó olvas. A
+  Laravel 13 maga PHP 8.3-at kér, így 8.2-n a csomag Laravel 12-vel fut.
+
+  - **A CI-mátrix hét ág:** PHP 8.2 / 8.3 / 8.4 / 8.5 × Laravel 12 / 13, a 8.2 × 13 kizárva. A 8.2-es
+    ág Pest 3-ra / PHPUnit 11-re és Testbench 10-re old fel; a teljes kapu (Pint, PHPStan `max`, a
+    suite) helyben lefutott PHP 8.2.33 / Laravel 12-n is.
+  - **A PHPStan a támogatott tartomány ellen elemez, nem a futtató PHP ellen.** A fejlesztői image
+    8.4, és `phpVersion` nélkül a PHPStan egy visszaírt `const string`-et szó nélkül átenged —
+    mérve, nem feltételezve. A `phpstan.neon` most `min: 80200` / `max: 80599`-et mond, ettől a
+    8.3-as szintaxis (típusos konstans, dinamikus nevű konstans-lekérés) nem ignorálható hiba. A
+    8.3-as *függvények* nem kockázat: a Laravel megköveteli a `symfony/polyfill-php83`-at és a
+    későbbieket. Új teszt a `VersioningTest`-ben: a tartomány `min`-je a `composer.json` küszöbe, a
+    `max`-ja a mátrix legújabb verziója.
+  - **A `tamas-labs/aura-schema`-nak is `^8.2` kell**, különben a 8.2-es ág nem települ: a
+    dev-függőség maga is `^8.3`-at kért, ugyanazért a két típusos konstansért. Ott ugyanez a
+    változás készült el; a 8.2-es CI-ág attól a kiadástól zöld, ami ezt tartalmazza.
+
 - **Az audit alacsony prioritású listája végigvéve (A1–A7).** Hét megállapítás, egy menetben; kettő
   közülük nem változtatás lett, hanem kimondott döntés.
 

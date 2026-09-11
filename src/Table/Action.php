@@ -84,7 +84,7 @@ final class Action
      *
      * @var list<string>
      */
-    private const array PREFIXES = ['create', 'edit', 'show', 'destroy'];
+    private const PREFIXES = ['create', 'edit', 'show', 'destroy'];
 
     /**
      * The three suffixes that trigger auto-generation, and so the three shapes
@@ -92,16 +92,16 @@ final class Action
      *
      * @var list<string>
      */
-    private const array SUFFIXES = ['icon', 'link', 'button'];
+    private const SUFFIXES = ['icon', 'link', 'button'];
 
     /** The suffix an action takes unless {@see self::asLink()} or {@see self::asButton()} says otherwise. */
-    private const string DEFAULT_SUFFIX = 'icon';
+    private const DEFAULT_SUFFIX = 'icon';
 
     /** What a generated button falls back to when the registry offers nothing. */
-    private const string FALLBACK_VARIANT = 'primary';
+    private const FALLBACK_VARIANT = 'primary';
 
     /** Aura's placeholder alphabet, and Laravel's optional-parameter marker. */
-    private const string PARAMETER = '/\{(\w+)\??\}/';
+    private const PARAMETER = '/\{(\w+)\??\}/';
 
     private string $suffix = self::DEFAULT_SUFFIX;
 

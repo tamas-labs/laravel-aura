@@ -28,8 +28,8 @@ only about working on it.
 ## The gate
 
 `composer quality` is Laravel Pint (`laravel` preset), PHPStan/Larastan at level **max** over
-`src/`, `tests/` and `workbench/`, and Pest. CI runs the same thing across PHP 8.3 / 8.4 / 8.5 ×
-Laravel 12 / 13, measures coverage on one leg with a `--min=90` floor, and separately builds the
+`src/`, `tests/` and `workbench/`, and Pest. CI runs the same thing across PHP 8.2 / 8.3 / 8.4 / 8.5 ×
+Laravel 12 / 13 (8.2 on Laravel 12 alone — Laravel 13 requires 8.3), measures coverage on one leg with a `--min=90` floor, and separately builds the
 development image so the Dockerfile cannot rot.
 
 Run it before opening a pull request. It is fast, and it is the same command CI runs.
@@ -65,7 +65,9 @@ are worth knowing before you write the code rather than after:
 
 ## Conventions
 
-- PHP 8.3+, `declare(strict_types=1)` in every file (Pint enforces it).
+- PHP 8.2+, `declare(strict_types=1)` in every file (Pint enforces it). The image is 8.4, so 8.3-only
+  syntax — a native-typed class constant, a dynamic class constant fetch — would run locally and
+  break the floor; PHPStan's `phpVersion` range reports it instead.
 - Namespace `TamasLabs\Aura\`, PSR-4 from `src/`.
 - **Code comments in English**, in every version-controlled file. The maintainer's working language
   is Hungarian for discussion, commit messages, `README.hu.md` and `CHANGELOG.md`; a pull request

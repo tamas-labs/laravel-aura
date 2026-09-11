@@ -230,7 +230,7 @@ it('names the PHP versions CI actually runs', function () {
     }
 
     foreach (['README.en.md', 'README.hu.md'] as $readme) {
-        // Only the prose after the em dash: the `^8.3` in front of it is the
+        // Only the prose after the em dash: the `^8.2` in front of it is the
         // floor, which the constraint test already owns and which is allowed to
         // sit below the lowest version CI runs.
         $claim = Str::after(auraRequirementLine($readme, 'PHP'), '—');
@@ -261,6 +261,38 @@ it('runs every Laravel major the manifest allows, and no other', function () {
     preg_match_all('/\^(\d+)\./', auraRequires('illuminate/support'), $allowed);
 
     expect($matrix)->toBe($allowed[1]);
+});
+
+it('analyses the PHP versions the package supports, not the one it runs on', function () {
+    // The development image is PHP 8.4, and PHPStan left to itself analyses for
+    // the runtime it finds. A native-typed class constant — 8.3 syntax, and a
+    // parse error on the 8.2 floor — therefore passed the local gate without a
+    // word; only the 8.2 CI leg would have caught it, after the push. The
+    // functions are not the risk: Laravel requires `symfony/polyfill-php83`
+    // and later, so `json_validate()` exists on 8.2. The syntax is, and
+    // `phpVersion` is what makes PHPStan read it against the floor.
+    $range = '/^\s+phpVersion:\s*\n\s+min:\s*(\d+)\s*\n\s+max:\s*(\d+)\s*$/m';
+
+    if (preg_match($range, auraPackageFile('phpstan.neon'), $declared) !== 1) {
+        Assert::fail('phpstan.neon declares no phpVersion min/max range.');
+    }
+
+    if (preg_match('/^\^(\d+)\.(\d+)$/', auraRequires('php'), $floor) !== 1) {
+        Assert::fail('composer.json requires PHP as something other than ^major.minor.');
+    }
+
+    $matrix = array_map(
+        static fn (mixed $version): string => is_scalar($version) ? (string) $version : '',
+        auraDigArray(auraWorkflow(), 'jobs', 'test', 'strategy', 'matrix', 'php'),
+    );
+
+    usort($matrix, static fn (string $a, string $b): int => version_compare($a, $b));
+
+    [$major, $minor] = array_map('intval', explode('.', (string) end($matrix)));
+
+    // `min` is the first patch of the floor, `max` the last of the newest leg.
+    expect((int) $declared[1])->toBe((int) $floor[1] * 10000 + (int) $floor[2] * 100)
+        ->and((int) $declared[2])->toBe($major * 10000 + $minor * 100 + 99);
 });
 
 it('leaves the package version to the git tag', function () {
@@ -403,7 +435,7 @@ it('pins a matrix leg without rewriting the manifest', function () {
 
 it('installs the compatibility checker on its own, never beside the package', function () {
     // The tool requires PHP `~8.4.0 || ~8.5.0`, and this package's floor is
-    // `^8.3` with a CI leg to match: as a dev dependency it would take the whole
+    // `^8.2` with a CI leg to match: as a dev dependency it would take the whole
     // suite's floor up with it, and its `symfony/console` and `composer/composer`
     // constraints have every chance of colliding with Laravel's. `composer
     // bc-check` puts it in `build/`, where none of that meets anything.

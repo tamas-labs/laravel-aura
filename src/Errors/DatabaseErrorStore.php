@@ -38,7 +38,7 @@ final readonly class DatabaseErrorStore implements ErrorStore
      * on an older build. Nineteen columns times this stays clear of all of them,
      * and the packaged cap of 100 entries still comes to one statement.
      */
-    private const int CHUNK = 100;
+    private const CHUNK = 100;
 
     /**
      * What a repeat may move.
@@ -48,7 +48,7 @@ final readonly class DatabaseErrorStore implements ErrorStore
      * read back, so the statement carries values rather than a driver-specific
      * `GREATEST` or `receipts + 1` expression.
      */
-    private const array UPDATED = ['occurrences', 'receipts', 'last_occurred_at', 'last_received_at'];
+    private const UPDATED = ['occurrences', 'receipts', 'last_occurred_at', 'last_received_at'];
 
     public function __construct(private ErrorIngestConfig $config) {}
 
