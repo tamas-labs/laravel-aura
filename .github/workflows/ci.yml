@@ -141,8 +141,17 @@ jobs:
               run: docker compose build --build-arg UID=$(id -u) --build-arg GID=$(id -g) php
 
             # composer.lock is not committed (this is a library), so update, not install.
+            # `tamas-labs/aura-schema` comes from a GitHub VCS repository, which
+            # Composer reads through the GitHub API. The `test` job is
+            # authenticated by setup-php; nothing reaches this container unless it
+            # is passed in, and unauthenticated calls share the runner IP's rate
+            # limit — the step then fails at random with "Could not authenticate
+            # against github.com". `-e COMPOSER_AUTH` forwards the variable
+            # without writing the token into the command line.
             - name: Install dependencies in the container
-              run: docker compose run --rm php composer update --no-interaction --no-progress
+              env:
+                  COMPOSER_AUTH: '{"github-oauth": {"github.com": "${{ secrets.GITHUB_TOKEN }}"}}'
+              run: docker compose run --rm -e COMPOSER_AUTH php composer update --no-interaction --no-progress
 
             - name: Run the quality gate in the container
               run: docker compose run --rm php composer quality

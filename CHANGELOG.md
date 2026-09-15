@@ -198,6 +198,15 @@ version is independent of the package version.
     futott le: a PHP 8.2-es commit a sémacsomag `v1.1.0` tagje előtt ment fel, tehát hét ág a
     `v1.0.0`-t kapta. Helyben mindez nem látszott, mert a `vendor/`-ben kiadatlan sémafájlok ültek
     `v1.0.0` címke alatt. Az alsó korlát most az a legrégebbi kiadás, amivel a suite tényleg zöld.
+  - **A sémacsomag `v1.1.0`-ja mégsem fut 8.2-n.** `^8.2`-t hirdet, de a `public const string
+    VERSION` benne maradt: a típust levették, majd visszatették, mert a sémacsomag JS tesztje a
+    típusos deklarációt kereste szó szerint. A 8.2-es ágon ettől 52 teszt `ParseError`-rel bukott.
+    A javítás a sémacsomagban van (`v1.1.1`), innen a megkötés követi.
+  - **A CI docker-jobja tokent ad a konténerbe.** A sémacsomag GitHub VCS repositoryból jön, amit a
+    Composer a GitHub API-n át olvas; a `test` jobot a setup-php hitelesíti, a konténerbe viszont
+    semmi nem jutott, és a hitelesítés nélküli hívások a runner IP-jének közös rate limitjén
+    osztoznak — a lépés véletlenszerűen bukott „Could not authenticate against github.com”
+    hibával. A `COMPOSER_AUTH` most a `GITHUB_TOKEN`-nel megy be (`-e COMPOSER_AUTH`).
 
 - **Az audit alacsony prioritású listája végigvéve (A1–A7).** Hét megállapítás, egy menetben; kettő
   közülük nem változtatás lett, hanem kimondott döntés.
