@@ -8,6 +8,19 @@ version is independent of the package version.
 
 ### Added
 
+- **`Column::convention()` — a négy resource-akción túli DX-konvenció.** Az Aura kliens
+  preprocesszora (`preprocess{Icon,Link,Button,Badge,Progress}Fields.ts`) nemcsak a négy
+  resource-igét (`create`/`edit`/`show`/`destroy`) generálja a mezőnévből — bármelyik `{prefix}_icon`
+  / `_link` / `_button` / `_badge` / `_progress` nevű header-mezőt is, ha ahhoz nincs
+  `columnConfigs` bejegyzés. Eddig ezt a csomag csak a `Column::actions()`/`Action` négyes-négyes
+  kombinációjára fedte le (F5a); a többi ötre nem volt elsőosztályú API, csak a véletlen mellékhatása
+  annak, hogy a `Column::as()` opcionális. A `Column::convention('status', 'badge')` most explicit,
+  validált belépési pont: leellenőrzi, hogy `$type` az öt ismert típus egyike, és hogy `icon` /
+  `link` / `button` esetén a prefix nem ütközik a `Column::actions()` négy fenntartott igéjével — és
+  az `->as()` / `->configure()` / `->rules()` mindegyike elutasítja az így épített oszlopot, mert
+  bármelyik `body.columnConfigs` bejegyzést adna a mezőnek, ami szó nélkül kikapcsolná az Aura
+  saját generálását.
+
 - **A definíció-cache megmondható, hogy hol lakjon, és egyben üríthető (audit M5).** Az `AuraTable`
   eddig közvetlenül a `Cache` facade-ot használta, tehát a definíció mindig az alkalmazás
   alapértelmezett store-jába ment — akkor is, ha az egy `array` driver, ami mellett a cache némán

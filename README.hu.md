@@ -41,6 +41,7 @@ származnak — így nem tudnak elcsúszni egymástól.
   - [A kulcs placeholder, nem név](#a-kulcs-placeholder-nem-név)
   - [Eszkaláció](#eszkaláció)
   - [Route-ok](#action-route-ok)
+- [Konvenció-oszlopok](#konvenció-oszlopok)
 - [Soronkénti jogosultság](#soronkénti-jogosultság)
   - [Hogyan megy ki](#hogyan-megy-ki)
   - [Egy lekérdezés a lapra, nem soronként egy](#egy-lekérdezés-a-lapra-nem-soronként-egy)
@@ -103,6 +104,7 @@ tartja, hanem egy teszt.
 | Relációk mind a négy műveletben | |
 | A kilenc cella-renderelő, feltételekkel és cella-szabályokkal | |
 | Action-oszlopok — konvenció-mód és eszkaláció teljes konfigurációra | |
+| Konvenció-oszlopok — a böngészőben renderelt icon/link/button/badge/progress mezők | |
 | Route a `$resource`-ból, nevesített route-ból vagy kiírva | |
 | Soronkénti jogosultság — `allowedWhen()`, kötegelve vagy sem | |
 | Cache-elhető, kérésfüggetlen definíció | |
@@ -1254,6 +1256,76 @@ egy második paramétert. Egynél több nyitva hagyott paraméter elutasítva: c
 **Az action-route-ban a pont tilos**, szemben a csomag többi részével. Az Aura minden pontot perjelre
 cserél, tehát egy útvonal helyére írt Laravel route-**név** (`users.edit`) `/users/edit`-re oldódik
 fel: valódi URL, hiányzó azonosítóval, és sehol egy hiba. A route-nevekhez a `routeName()` való.
+
+---
+
+## Konvenció-oszlopok
+
+Az Aura preprocesszora nem áll meg a négy resource-akciónál. Egy header-cella, ami egy
+`{prefix}_{type}` nevű mezőt nevez meg — `status_badge`, `completion_progress`, `avatar_icon` —, és
+amihez sehol nincs konfiguráció, ugyanúgy generálódik, mint az `edit_icon`: a `Column::convention()`
+a `Column::actions()` testvére, olyan prefixre, ami nem a négy resource-ige egyike.
+
+```php
+use TamasLabs\Aura\Table\Column;
+
+Column::convention('status', 'badge')        // → mező: "status_badge"
+Column::convention('completion', 'progress') // → mező: "completion_progress"
+```
+
+Öt típus, és route-ot közülük csak az `icon` kap — és az is csak a négy fenntartott prefixen, ami
+inkább a `Column::actions()`-hoz tartozik (lásd lent):
+
+| Típus | Mit olvas | Route |
+| --- | --- | --- |
+| `icon` | glyph az `icons` regiszterből | a négy action-igén kívül soha |
+| `link` | egy értéket, `<a>`-ba csomagolva | soha |
+| `button` | egy értéket, Bootstrap gombként renderelve | soha |
+| `badge` | egy értéket, a `variants` regiszterből színezve | soha |
+| `progress` | egy numerikus értéket, sávként renderelve | soha |
+
+Az érték, amit mindegyik megjelenít, az Aura saját szabályát követi: ha a headerben már van egy
+másik oszlop, ami `$prefix`-et olvassa mezőként, a generált konfiguráció *annak az oszlopnak* a
+soronkénti értékét mutatja; ha nincs ilyen, a sornak magát a teljes, utótagos mezőt kell vinnie
+(`status_badge`) ugyanezen a néven.
+
+```php
+Column::make('status'),                     // sima oszlop, valahol máshol a táblában
+Column::convention('status', 'badge'),      // a "status" saját soronkénti értékét olvassa
+```
+
+A `body.columnConfigs`-ba semmi nem kerül — ez az egész lényege, és ez ki is van kényszerítve, nem
+csak dokumentálva: az `->as()`, a `->configure()` és a `->rules()` mind elutasítja, ha ilyen
+oszlopra próbálod hívni őket, mert bármelyik bejegyzést adna a mezőnek, és ezzel szó nélkül
+kikapcsolná a böngésző saját generálását.
+
+```php
+Column::convention('status', 'badge')->as(Badge::fromEnum(Status::class)); // elutasítva
+```
+
+Amint bármit testre kell szabni — fix variant, mapping, küszöbérték —, a konvenció-mód rossz
+választás. Építsd fel az oszlopot `Column::make()`-kal és egy explicit cellakonfigurációval; lásd
+[Cella-renderelés](#cella-renderelés).
+
+A sima oszlop-metódusok magára a cellára továbbra is működnek:
+
+```php
+Column::convention('status', 'badge')->content('Állapot')->align('end');
+```
+
+**A `create`, `edit`, `show` és `destroy` továbbra is a `Column::actions()`-é marad**, `icon`,
+`link` és `button` típuson — ez a négy prefix ott resource-route-ra oldódik, függetlenül attól,
+melyik oszlop nevezte meg a mezőt, ezért a `Column::convention('edit', 'icon')` ugyanúgy elutasított,
+mint egy csupasz `Column::make('edit_icon')`. A `badge` és a `progress` soha nem route-ol, tehát egy
+resource-ige prefix bármelyiken egyértelmű és megengedett.
+
+A rendezés, keresés és szűrés ugyanúgy működik, mint bármely más oszlopon, `->reference()`-en
+keresztül, amikor maga a konvenció-mező nem olyan, amit az adatbázis ismer — ami a szokásos eset,
+hiszen a mező jellemzően szintetikus:
+
+```php
+Column::convention('status', 'badge')->reference('status')->sortable();
+```
 
 ---
 

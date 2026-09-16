@@ -611,6 +611,68 @@ final class InvalidDefinition extends LogicException implements AuraException
     }
 
     /**
+     * `Column::convention()` only ever emits `icon`, `link`, `button`,
+     * `badge` or `progress` — the five suffixes Aura's preprocessor
+     * recognises outside the four resource verbs.
+     *
+     * @param  list<string>  $types
+     *
+     * @internal
+     */
+    public static function unknownConventionType(string $type, array $types): self
+    {
+        return new self(sprintf(
+            '"%s" is not a type Aura\'s browser-side preprocessor recognises for Column::convention(). '
+            .'Use one of: %s.',
+            $type,
+            implode(', ', $types),
+        ));
+    }
+
+    /**
+     * `create`, `edit`, `show` and `destroy` mean something specific to
+     * Aura's preprocessor on an `icon`, `link` or `button` field — a
+     * resource route, not plain data — so {@see \TamasLabs\Aura\Table\Column::convention()}
+     * refuses to build one under a name that would be read the other way.
+     *
+     * @internal
+     */
+    public static function conventionPrefixReserved(string $prefix, string $type): self
+    {
+        return new self(sprintf(
+            '"%s" is one of Aura\'s four resource verbs, and a "%s" field named "%s_%s" resolves to a '
+            .'route, not a plain %s. Use Column::actions() to offer it as an action, or pick a '
+            .'different prefix if this column is unrelated data.',
+            $prefix,
+            $type,
+            $prefix,
+            $type,
+            $type,
+        ));
+    }
+
+    /**
+     * A column built by {@see \TamasLabs\Aura\Table\Column::convention()}
+     * leaves everything to Aura's preprocessor, which only generates a
+     * configuration for a field that carries none at all — attaching one,
+     * even a `cellRules`-only stand-in, would silently switch the
+     * auto-generation off in favour of whatever was attached.
+     *
+     * @internal
+     */
+    public static function conventionHasConfig(string $field): self
+    {
+        return new self(sprintf(
+            'Column "%s" was built with Column::convention(), which leaves the field entirely to '
+            .'Aura\'s browser-side preprocessor — no body.columnConfigs entry at all, not even a '
+            .'default one. as(), configure() and rules() all give the field an entry, which would '
+            .'switch the auto-generation off without a word. Build the column with Column::make() '
+            .'and an explicit cell configuration instead.',
+            $field,
+        ));
+    }
+
+    /**
      * A column has to name its source, unless it is a grouping cell.
      *
      * @internal

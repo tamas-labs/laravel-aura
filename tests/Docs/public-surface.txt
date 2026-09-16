@@ -102,6 +102,7 @@ Column::colspan
 Column::combined
 Column::configure
 Column::content
+Column::convention
 Column::currency
 Column::date
 Column::datetime

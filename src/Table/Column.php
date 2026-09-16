@@ -64,6 +64,14 @@ final class Column
     use Macroable;
 
     /**
+     * The five suffixes Aura's browser-side preprocessor recognises outside
+     * the four resource verbs — see {@see self::convention()}.
+     *
+     * @var list<string>
+     */
+    private const CONVENTION_TYPES = ['icon', 'link', 'button', 'badge', 'progress'];
+
+    /**
      * Set explicitly by the caller. Wins over everything inferred.
      *
      * @var array<string, mixed>
@@ -87,6 +95,12 @@ final class Column
      * @var list<Action>|null
      */
     private ?array $actions = null;
+
+    /**
+     * Built by {@see self::convention()}: no cell configuration may ever
+     * attach, because the whole point is that the browser generates one.
+     */
+    private bool $convention = false;
 
     /** @var string|list<string>|null */
     private string|array|null $cellClass = null;
@@ -230,6 +244,65 @@ final class Column
             static fn (Action $action): string => $action->field(),
             $actions,
         );
+
+        return $column;
+    }
+
+    /**
+     * A column left for Aura's browser-side convention to render — the
+     * sibling of {@see self::actions()} for a prefix that is not one of the
+     * four resource verbs.
+     *
+     * Aura's response preprocessor recognises a field named `{prefix}_{type}`
+     * and, finding no configuration for it, generates one from the name
+     * alone: a plain glyph for `icon`, a colour from the `variants` registry
+     * for `badge` and `button`, and — for all but `icon` — the value read
+     * either from a sibling column named `$prefix` or, absent one, from the
+     * suffixed field itself.
+     *
+     * ```php
+     * Column::convention('status', 'badge')       // → field "status_badge"
+     * Column::convention('completion', 'progress') // → field "completion_progress"
+     * ```
+     *
+     * Nothing is emitted into `body.columnConfigs` — {@see self::as()},
+     * {@see self::configure()} and {@see self::rules()} all refuse to attach
+     * to a column built this way, because any of the three would give the
+     * field a configuration and switch the browser's own generation off
+     * without a word. The moment anything needs customising — a fixed
+     * variant, a mapping, thresholds — this is the wrong call: build the
+     * column with {@see self::make()} and an explicit
+     * {@see CellConfig} instead.
+     *
+     * `create`, `edit`, `show` and `destroy` are reserved for
+     * {@see self::actions()} when `$type` is `icon`, `link` or `button` —
+     * those four prefixes resolve to a resource route there regardless of
+     * which column declared the field, so a data column naming one under
+     * that suffix is refused for the same reason a bare
+     * `Column::make('edit_icon')` is.
+     *
+     * @param  string  $type  One of `icon`, `link`, `button`, `badge` or `progress` — checked at
+     *                        runtime, and deliberately not typed as a literal union: a caller
+     *                        building `$type` from anything other than a literal (a config value,
+     *                        a loop) would otherwise fail no louder than a blank cell.
+     *
+     * @throws InvalidDefinition When `$type` is not one Aura's preprocessor
+     *                           recognises, or `$prefix` is a reserved verb.
+     */
+    public static function convention(string $prefix, string $type): self
+    {
+        if (! in_array($type, self::CONVENTION_TYPES, true)) {
+            throw InvalidDefinition::unknownConventionType($type, self::CONVENTION_TYPES);
+        }
+
+        if (in_array($type, ['icon', 'link', 'button'], true) && Action::isReservedPrefix($prefix)) {
+            throw InvalidDefinition::conventionPrefixReserved($prefix, $type);
+        }
+
+        $column = new self;
+        $column->convention = true;
+        $column->attributes['field'] = $prefix.'_'.$type;
+        $column->inferred['content'] = self::titleFrom($prefix);
 
         return $column;
     }
@@ -570,6 +643,8 @@ final class Column
      */
     public function as(CellConfig $config): self
     {
+        $this->assertNotConvention();
+
         $this->config = $config;
 
         return $this;
@@ -590,6 +665,8 @@ final class Column
      */
     public function configure(string $field, CellConfig $config): self
     {
+        $this->assertNotConvention();
+
         $this->fieldConfigs[$field] = $config;
 
         return $this;
@@ -603,6 +680,8 @@ final class Column
      */
     public function rules(CellRules $rules): self
     {
+        $this->assertNotConvention();
+
         $this->rules = $rules;
 
         return $this;
@@ -890,6 +969,21 @@ final class Column
         throw InvalidDefinition::permissionNeedsField(
             is_string($key) ? '"'.$key.'"' : '(with no key)',
         );
+    }
+
+    /**
+     * A column built by {@see self::convention()} leaves its field entirely to
+     * Aura's preprocessor, which only generates a configuration for a field
+     * that carries none at all — so nothing here may give it one, not even a
+     * `cellRules`-only stand-in.
+     *
+     * @throws InvalidDefinition
+     */
+    private function assertNotConvention(): void
+    {
+        if ($this->convention) {
+            throw InvalidDefinition::conventionHasConfig($this->declaredField() ?? '');
+        }
     }
 
     /**

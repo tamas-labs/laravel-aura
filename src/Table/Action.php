@@ -428,6 +428,20 @@ final class Action
     }
 
     /**
+     * Is this prefix one of Aura's four resource verbs?
+     *
+     * {@see Column::convention()} refuses to pair it with `icon`, `link` or
+     * `button` — those three suffixes are exactly where a resource-verb
+     * prefix means a route rather than plain data.
+     *
+     * @internal
+     */
+    public static function isReservedPrefix(string $prefix): bool
+    {
+        return in_array($prefix, self::PREFIXES, true);
+    }
+
+    /**
      * Is this field name one Aura will turn into a resource route?
      *
      * Read by the definition builder, which refuses such a name anywhere but an

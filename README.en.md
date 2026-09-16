@@ -40,6 +40,7 @@ fields the query will accept come out of the same definition, so they cannot dri
   - [The key is a placeholder, not a name](#the-key-is-a-placeholder-not-a-name)
   - [Escalation](#escalation)
   - [Routes](#action-routes)
+- [Convention columns](#convention-columns)
 - [Per-row permissions](#per-row-permissions)
   - [How it is emitted](#how-it-is-emitted)
   - [One query for the page, not one per row](#one-query-for-the-page-not-one-per-row)
@@ -102,6 +103,7 @@ by discipline.
 | Relations in all four operations | |
 | The nine cell renderers, with conditions and cell rules | |
 | Action columns — convention mode, and escalation to a full configuration | |
+| Convention columns — the browser-rendered icon/link/button/badge/progress fields | |
 | Routes from `$resource`, from a named route, or spelled out | |
 | Per-row permissions — `allowedWhen()`, batched or not | |
 | A cacheable, request-independent definition | |
@@ -1243,6 +1245,75 @@ a second parameter. More than one parameter left open is refused — only one ca
 a slash, so a Laravel route *name* passed where a path belongs (`users.edit`) resolves to
 `/users/edit`: a real URL, with the identifier missing, and no error anywhere. `routeName()` is the
 supported way to use a route name.
+
+---
+
+## Convention columns
+
+Aura's preprocessor does not stop at the four resource actions. A header cell naming a field
+`{prefix}_{type}` — `status_badge`, `completion_progress`, `avatar_icon` — with no configuration
+anywhere for it, is generated the same way `edit_icon` is: `Column::convention()` is the sibling
+of `Column::actions()` for a prefix that is not one of the four resource verbs.
+
+```php
+use TamasLabs\Aura\Table\Column;
+
+Column::convention('status', 'badge')        // → field "status_badge"
+Column::convention('completion', 'progress') // → field "completion_progress"
+```
+
+Five types, and only `icon` ever gets a route — and only for the four reserved prefixes, which
+belong to `Column::actions()` instead (see below):
+
+| Type | Reads | Never routes |
+| --- | --- | --- |
+| `icon` | a glyph from the `icons` registry | outside the four action verbs |
+| `link` | a value, wrapped in `<a>` | always |
+| `button` | a value, rendered as a Bootstrap button | always |
+| `badge` | a value, coloured from the `variants` registry | always |
+| `progress` | a numeric value, rendered as a bar | always |
+
+The value each one displays follows Aura's own rule: if another column in the header already reads
+`$prefix` as its field, the generated configuration shows *that* column's per-row value; otherwise
+the row has to carry the full suffixed field itself (`status_badge`) under that name.
+
+```php
+Column::make('status'),                     // a plain column, elsewhere in the table
+Column::convention('status', 'badge'),      // reads "status"'s own per-row value
+```
+
+Nothing is emitted into `body.columnConfigs` — that is the whole point, and it is enforced rather
+than merely documented: `->as()`, `->configure()` and `->rules()` all refuse to attach to a column
+built this way, because any of the three would give the field a configuration and switch the
+browser's own generation off without a word.
+
+```php
+Column::convention('status', 'badge')->as(Badge::fromEnum(Status::class)); // refused
+```
+
+The moment anything needs customising — a fixed variant, a mapping, thresholds — convention mode is
+the wrong call. Build the column with `Column::make()` and an explicit cell configuration instead;
+see [Cell rendering](#cell-rendering).
+
+Ordinary column methods still work on the cell itself:
+
+```php
+Column::convention('status', 'badge')->content('State')->align('end');
+```
+
+**`create`, `edit`, `show` and `destroy` stay reserved for `Column::actions()`**, on `icon`, `link`
+and `button` — those four prefixes resolve to a resource route there regardless of which column
+declared the field, so `Column::convention('edit', 'icon')` is refused for the same reason a bare
+`Column::make('edit_icon')` is. `badge` and `progress` never route, so a resource-verb prefix on
+either is unambiguous and allowed.
+
+Sorting, searching and filtering work as on any other column, through `->reference()` when the
+convention field itself is not one the database has — which is the ordinary case, since the field
+is usually synthetic:
+
+```php
+Column::convention('status', 'badge')->reference('status')->sortable();
+```
 
 ---
 
